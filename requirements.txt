@@ -1,0 +1,11 @@
+requests>=2.28.0
+beautifulsoup4>=4.11.0
+openpyxl>=3.1.0
+reportlab>=4.0.0
+fastapi>=0.100.0
+uvicorn>=0.20.0
+pydantic>=2.0.0
+# Optional: needs Chrome installed. Enables screenshots in the PDF issue report
+# and headless rendering of JavaScript-heavy pages. Without it the PDF shows
+# page-position sketches instead of screenshots.
+# selenium>=4.15.0

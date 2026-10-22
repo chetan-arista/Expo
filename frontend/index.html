@@ -1,0 +1,1828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Universal Website Crawler & Link Intelligence</title>
+  
+  <!-- Refined Typography: Plus Jakarta Sans (Clean Editorial Sans) + Outfit (Stat Numbers) + JetBrains Mono (Code/URLs) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            display: ['"Outfit"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace']
+          },
+          colors: {
+            // Neka Light Warm Editorial Palette
+            warm: {
+              50: '#FAF9F5',
+              100: '#F5F4EE',
+              200: '#EBE7DE',
+              300: '#DDD8CB',
+              400: '#C2BCAD',
+              card: '#FFFFFF',
+              border: '#E8E4DB'
+            },
+            charcoal: {
+              900: '#181C1A',
+              800: '#232926',
+              700: '#343C37',
+              600: '#4D5650',
+              500: '#67716A',
+              400: '#8A948D',
+              300: '#B0B7B2'
+            },
+            sage: {
+              900: '#1B3824',
+              800: '#244B30',
+              700: '#2E5E3D',
+              600: '#3D794F',
+              500: '#529668',
+              400: '#75B28B',
+              100: '#E9F4ED',
+              50: '#F2F8F4'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #FAF9F5;
+      color: #181C1A;
+    }
+    
+    .font-display {
+      font-family: 'Outfit', sans-serif;
+    }
+    
+    code, pre, .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Neka Warm Organic Cards */
+    .neka-card {
+      background-color: #FFFFFF;
+      border: 1px solid #E8E4DB;
+      box-shadow: 0 4px 24px -2px rgba(27, 36, 30, 0.04), 0 2px 6px -1px rgba(27, 36, 30, 0.02);
+    }
+
+    .neka-card-subtle {
+      background-color: #F5F4EE;
+      border: 1px solid #E8E4DB;
+    }
+
+    /* Gradients sampled from Neka Health Dashboard Reference */
+    .grad-sage {
+      background: linear-gradient(145deg, #244B30 0%, #3D704D 50%, #85A786 100%);
+    }
+
+    .grad-amber {
+      background: linear-gradient(145deg, #C2812E 0%, #DE9E47 50%, #EFC585 100%);
+    }
+
+    .grad-peach-blue {
+      background: linear-gradient(145deg, #BA6349 0%, #D4846F 50%, #7697A3 100%);
+    }
+
+    .grad-rose {
+      background: linear-gradient(145deg, #9C3345 0%, #BD4B5F 50%, #DA798B 100%);
+    }
+
+    /* Custom Refined Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #F5F4EE;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #D8D3C5;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #C2BCAD;
+    }
+
+    /* Pulsing Dots */
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.9; }
+      50% { transform: scale(1.2); opacity: 0.3; }
+      100% { transform: scale(0.95); opacity: 0.9; }
+    }
+    .pulse-indicator {
+      animation: pulse-ring 2.5s infinite cubic-bezier(0.4, 0, 0.6, 1);
+    }
+
+    /* Downloads menu */
+    .dl-link { cursor: pointer; }
+    .dl-ext { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8A948D; font-weight: 500; }
+    .dot { display: inline-block; width: 7px; height: 7px; border-radius: 9999px; margin-right: 8px; vertical-align: middle; }
+
+    /* Category cards: selected state */
+    .cat-card { position: relative; }
+    .cat-card.is-active { box-shadow: 0 0 0 2px var(--cat-color, #244B30), 0 8px 20px -6px rgba(27, 36, 30, 0.18); transform: translateY(-2px); }
+    .cat-card.is-active::after { content: ''; position: absolute; left: 50%; bottom: -9px; transform: translateX(-50%); border: 7px solid transparent; border-top-color: var(--cat-color, #244B30); border-bottom: 0; }
+    .cat-meter { height: 4px; border-radius: 9999px; background: #F0ECE3; overflow: hidden; }
+    .cat-meter > span { display: block; height: 100%; border-radius: 9999px; transition: width .4s ease; }
+
+    /* Clickable issue rows */
+    tr.issue-row { cursor: pointer; }
+    tr.issue-row:hover td { background: #FDF6F7; }
+
+    /* Screenshot frames in the issue modal */
+    .shot-frame { background: #F5F4EE; border: 1px solid #E8E4DB; border-radius: 14px; overflow: hidden; min-height: 150px; display: flex; align-items: center; justify-content: center; }
+    .shot-frame img { width: 100%; display: block; cursor: zoom-in; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .pulse-indicator, .cat-card, .cat-meter > span { animation: none; transition: none; }
+    }
+  </style>
+</head>
+<body class="bg-[#FAF9F5] text-charcoal-900 min-h-screen flex flex-col selection:bg-sage-100 selection:text-sage-800 antialiased relative overflow-x-hidden">
+
+  <!-- Subtle Warm Ambient Lighting -->
+  <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
+    <div class="absolute -top-40 left-1/2 -translate-x-1/2 w-[1100px] h-[550px] bg-gradient-to-b from-sage-50 via-warm-100 to-transparent blur-[120px] rounded-full opacity-70"></div>
+    <div class="absolute top-1/4 -right-48 w-[600px] h-[600px] bg-[#F8EFE4] blur-[140px] rounded-full opacity-60"></div>
+    <div class="absolute bottom-1/3 -left-48 w-[600px] h-[600px] bg-[#EBF3ED] blur-[140px] rounded-full opacity-60"></div>
+  </div>
+
+  <!-- Top Warm Glass Navigation Bar -->
+  <header class="relative z-30 border-b border-[#E8E4DB] bg-[#FAF9F5]/90 backdrop-blur-md sticky top-0">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 py-3.5 flex items-center justify-between">
+      
+      <!-- Brand Logo & Title -->
+      <div class="flex items-center space-x-3.5">
+        <div class="w-10 h-10 rounded-2xl bg-white border border-[#E8E4DB] shadow-sm flex items-center justify-center">
+          <svg class="w-5 h-5 text-sage-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2.5">
+            <span class="font-display text-base sm:text-lg font-bold tracking-tight text-charcoal-900">
+              Universal Website Crawler
+            </span>
+            <span class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-sage-100 text-sage-800 border border-sage-400/40">
+              <span class="w-1.5 h-1.5 rounded-full bg-sage-600"></span>
+              Active Engine
+            </span>
+          </div>
+          <p class="text-[11px] text-charcoal-500 font-medium">Autonomous Link Discovery & Health Intelligence</p>
+        </div>
+      </div>
+
+      <!-- Downloads menu: full report, PDF issue report, per-category Excel -->
+      <div id="btnTopDownload" class="hidden relative">
+        <button type="button" onclick="toggleDownloadMenu(event)" class="inline-flex items-center gap-2 bg-white hover:bg-warm-100 text-charcoal-900 text-xs font-bold px-4 sm:px-5 py-2.5 rounded-full border border-[#DCD6C9] shadow-sm transition-all duration-200 cursor-pointer active:scale-95">
+          <svg class="w-4 h-4 text-sage-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          <span>Downloads</span>
+          <svg class="w-3 h-3 text-charcoal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+        <div id="downloadMenu" class="hidden absolute right-0 mt-2 w-64 bg-white border border-[#E8E4DB] rounded-2xl shadow-xl p-2 z-50 text-xs">
+          <a data-dl="all" class="dl-link flex items-center justify-between px-3 py-2 rounded-xl hover:bg-warm-100 font-bold text-charcoal-900">Full report <span class="dl-ext">.xlsx</span></a>
+          <a data-dl="pdf" class="dl-link flex items-center justify-between px-3 py-2 rounded-xl hover:bg-warm-100 font-bold text-[#9C3345]">Issue report + screenshots <span class="dl-ext">.pdf</span></a>
+          <div class="border-t border-[#F0ECE3] my-1.5"></div>
+          <div class="px-3 pt-1 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-charcoal-400">By category</div>
+          <a data-dl="issues" class="dl-link flex items-center justify-between px-3 py-1.5 rounded-xl hover:bg-warm-100 text-charcoal-700"><span><span class="dot bg-[#9C3345]"></span>All issues</span><span class="dl-ext">.xlsx</span></a>
+          <a data-dl="4xx" class="dl-link flex items-center justify-between px-3 py-1.5 rounded-xl hover:bg-warm-100 text-charcoal-700"><span><span class="dot bg-[#9C3345]"></span>Broken (4xx)</span><span class="dl-ext">.xlsx</span></a>
+          <a data-dl="5xx" class="dl-link flex items-center justify-between px-3 py-1.5 rounded-xl hover:bg-warm-100 text-charcoal-700"><span><span class="dot bg-[#734399]"></span>Server errors (5xx)</span><span class="dl-ext">.xlsx</span></a>
+          <a data-dl="error" class="dl-link flex items-center justify-between px-3 py-1.5 rounded-xl hover:bg-warm-100 text-charcoal-700"><span><span class="dot bg-charcoal-600"></span>Network errors</span><span class="dl-ext">.xlsx</span></a>
+          <a data-dl="3xx" class="dl-link flex items-center justify-between px-3 py-1.5 rounded-xl hover:bg-warm-100 text-charcoal-700"><span><span class="dot bg-[#C2812E]"></span>Redirects (3xx)</span><span class="dl-ext">.xlsx</span></a>
+          <a data-dl="2xx" class="dl-link flex items-center justify-between px-3 py-1.5 rounded-xl hover:bg-warm-100 text-charcoal-700"><span><span class="dot bg-sage-600"></span>Healthy (2xx)</span><span class="dl-ext">.xlsx</span></a>
+          <a data-dl="external" class="dl-link flex items-center justify-between px-3 py-1.5 rounded-xl hover:bg-warm-100 text-charcoal-700"><span><span class="dot bg-[#734399]/50"></span>External links</span><span class="dl-ext">.xlsx</span></a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 flex-1 w-full space-y-7">
+
+    <!-- Hero Title Section (Neka Clean Editorial Style) -->
+    <div class="text-center max-w-3xl mx-auto space-y-2.5 pt-2 sm:pt-4">
+      <h1 class="font-display text-3xl sm:text-5xl font-extrabold tracking-tight text-charcoal-900 leading-[1.15]">
+        Find every broken link. <span class="text-sage-700">See exactly where it is.</span>
+      </h1>
+      <p class="text-xs sm:text-sm text-charcoal-500 font-normal">
+        Crawl a site → see issues by category → get screenshots, causes and fixes.
+      </p>
+    </div>
+
+    <!-- Main Crawler Action Card (Hero Input Box in Neka Warm Style) -->
+    <div class="max-w-4xl mx-auto neka-card rounded-3xl p-6 sm:p-8 relative overflow-hidden">
+      <form id="crawlForm" onsubmit="event.preventDefault(); startCrawl();" class="space-y-4">
+        
+        <!-- URL Input & Action Buttons -->
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-charcoal-600 mb-2">Target Website Address</label>
+          <div class="flex flex-col sm:flex-row gap-3">
+            <div class="relative flex-1">
+              <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-charcoal-400">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
+              </div>
+              <input 
+                type="text" 
+                id="urlInput" 
+                placeholder="https://example.com or companydomain.com" 
+                value="" 
+                class="w-full pl-12 pr-4 py-3.5 bg-[#FAF9F5] border border-[#DDD8CB] rounded-2xl text-charcoal-900 placeholder-charcoal-400 focus:outline-none focus:ring-2 focus:ring-sage-500/25 focus:border-sage-600 transition-all font-medium text-sm sm:text-base shadow-inner"
+              >
+            </div>
+
+            <!-- Start / Control Buttons -->
+            <div class="flex gap-2">
+              <button 
+                type="button" 
+                id="btnStart" 
+                onclick="startCrawl();"
+                class="inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-sage-800 hover:bg-sage-900 text-white font-bold rounded-2xl shadow-md shadow-sage-800/20 transition-all duration-200 cursor-pointer text-sm whitespace-nowrap active:scale-95"
+              >
+                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.6" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.6" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span id="btnStartText">Start Crawling</span>
+              </button>
+
+              <button 
+                type="button" 
+                id="btnPause" 
+                onclick="togglePause();" 
+                class="hidden items-center justify-center gap-1.5 px-6 py-3.5 bg-[#C2812E] hover:bg-[#A96D22] text-white font-bold rounded-2xl shadow-md shadow-[#C2812E]/25 transition cursor-pointer text-sm active:scale-95"
+              >
+                <span id="pauseBtnText">Pause</span>
+              </button>
+
+              <button 
+                type="button" 
+                id="btnStop" 
+                onclick="stopCrawl();" 
+                class="hidden items-center justify-center gap-1.5 px-6 py-3.5 bg-[#9C3345] hover:bg-[#832637] text-white font-bold rounded-2xl shadow-md shadow-[#9C3345]/25 transition cursor-pointer text-sm active:scale-95"
+              >
+                Stop
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mode Options: SPA / React Toggle -->
+        <div class="flex flex-wrap items-center justify-between gap-3 pt-3 pb-1 border-t border-[#E8E4DB]">
+          <label class="flex items-center gap-2.5 cursor-pointer text-xs text-charcoal-700 hover:text-charcoal-900 select-none group">
+            <input 
+              type="checkbox" 
+              id="chkSpaMode" 
+              class="w-4 h-4 rounded-md bg-[#FAF9F5] border border-[#DDD8CB] text-sage-700 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+            >
+            <span class="font-bold text-charcoal-800 group-hover:text-sage-800 transition">React / Single Page App (SPA) Mode</span>
+            <span class="text-[11px] text-charcoal-500 font-normal hidden sm:inline">(Discover client-side routes for Next.js or Vite without standard HTML links)</span>
+          </label>
+        </div>
+
+        <!-- Optional Authentication Accordion -->
+        <div class="pt-2 border-t border-[#E8E4DB]">
+          <button 
+            type="button" 
+            onclick="toggleAuthSection();" 
+            class="w-full flex items-center justify-between text-left text-xs font-semibold text-charcoal-600 hover:text-sage-800 transition py-1 cursor-pointer"
+          >
+            <div class="flex items-center gap-2">
+              <span class="text-sm">🔒</span>
+              <span>Authentication Required? (Optional for password-protected or member pages)</span>
+            </div>
+            <svg id="authChevron" class="w-4 h-4 text-charcoal-400 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </button>
+
+          <!-- Collapsible Auth Panel -->
+          <div id="authSection" class="hidden mt-3 pt-3 border-t border-[#E8E4DB] space-y-4">
+            
+            <!-- Notice Banner for Auto-detected Auth -->
+            <div id="authNoticeBanner" class="hidden p-3.5 rounded-2xl bg-sage-50 border border-sage-400/40 text-xs text-sage-800 flex items-center justify-between shadow-sm">
+              <div class="flex items-center gap-2.5">
+                <span class="text-base">🔐</span>
+                <span id="authNoticeText">Login portal detected! Please choose an authentication method below, then click Start Crawling.</span>
+              </div>
+            </div>
+
+            <!-- Auth Mode Switcher (Tabs) -->
+            <div class="flex flex-wrap items-center gap-2 border-b border-[#E8E4DB] pb-2.5">
+              <button 
+                type="button" 
+                id="tabAuthCookies" 
+                onclick="switchAuthTab('cookies')" 
+                class="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-sage-100 text-sage-800 border border-sage-400/50 transition flex items-center gap-2 cursor-pointer shadow-sm"
+              >
+                <span>🍪</span>
+                <span>Session Cookies (Option A - Recommended for Turnstile/CAPTCHA)</span>
+              </button>
+              <button 
+                type="button" 
+                id="tabAuthForm" 
+                onclick="switchAuthTab('form')" 
+                class="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-white text-charcoal-600 hover:text-charcoal-900 border border-[#E8E4DB] transition flex items-center gap-2 cursor-pointer"
+              >
+                <span>🔑</span>
+                <span>Username & Password</span>
+              </button>
+            </div>
+
+            <!-- Panel 1: Session Cookies (Option A) -->
+            <div id="authCookiesPanel" class="space-y-2.5">
+              <label class="block text-[11px] font-semibold text-charcoal-700">
+                Paste Session Cookies or JSON
+                <span class="text-sage-700 font-normal ml-1">(Bypasses Cloudflare Turnstile, CAPTCHA, 2FA, and SSO)</span>
+              </label>
+              <textarea 
+                id="authCookies" 
+                rows="3" 
+                placeholder="e.g. sb-qfayycpkqythomosacxp-auth-token=... or document.cookie string or exported JSON"
+                class="w-full px-3.5 py-2.5 bg-[#FAF9F5] border border-[#DDD8CB] rounded-xl text-xs font-mono text-sage-900 placeholder-charcoal-400 focus:outline-none focus:border-sage-600 resize-y shadow-inner"
+              ></textarea>
+              <div class="p-3 rounded-xl bg-[#F5F4EE] border border-[#E8E4DB] text-[11px] text-charcoal-600 leading-relaxed space-y-1.5">
+                <div class="font-bold text-charcoal-900 flex items-center gap-1.5">
+                  <span>💡</span> How to get your session cookie in 15 seconds:
+                </div>
+                <ol class="list-decimal list-inside space-y-1 text-charcoal-600">
+                  <li>Log in to the target site in your browser.</li>
+                  <li>Press <kbd class="px-1.5 py-0.5 bg-white rounded text-sage-800 font-mono text-[10px] border border-[#DDD8CB]">F12</kbd> → <strong>Application</strong> tab → <strong>Cookies</strong> → the site.</li>
+                  <li>Copy the session cookie as <code class="text-sage-800 font-mono bg-white px-1 py-0.5 rounded border border-[#DDD8CB]">name=value</code>, e.g. <code class="text-sage-800 font-mono bg-white px-1 py-0.5 rounded border border-[#DDD8CB]">__Secure-next-auth.session-token=…</code></li>
+                  <li>Paste above. (<code class="font-mono">document.cookie</code> in the Console hides httpOnly session cookies, so use the Application tab.)</li>
+                </ol>
+              </div>
+            </div>
+
+            <!-- Panel 2: Form Login (Username/Email & Password) -->
+            <div id="authFormPanel" class="hidden space-y-3">
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label class="block text-[11px] font-semibold text-charcoal-600 mb-1">Login Page URL (Optional)</label>
+                  <input 
+                    type="text" 
+                    id="authLoginUrl" 
+                    placeholder="e.g. /login (auto-detected if blank)" 
+                    class="w-full px-3.5 py-2 bg-[#FAF9F5] border border-[#DDD8CB] rounded-xl text-xs text-charcoal-900 placeholder-charcoal-400 focus:outline-none focus:border-sage-600 shadow-inner"
+                  >
+                </div>
+                <div>
+                  <label class="block text-[11px] font-semibold text-charcoal-600 mb-1">Username / Email</label>
+                  <input 
+                    type="text" 
+                    id="authUsername" 
+                    placeholder="your.email@example.com" 
+                    class="w-full px-3.5 py-2 bg-[#FAF9F5] border border-[#DDD8CB] rounded-xl text-xs text-charcoal-900 placeholder-charcoal-400 focus:outline-none focus:border-sage-600 shadow-inner"
+                  >
+                </div>
+                <div class="relative">
+                  <label class="block text-[11px] font-semibold text-charcoal-600 mb-1">Password</label>
+                  <input 
+                    type="password" 
+                    id="authPassword" 
+                    placeholder="••••••••••••" 
+                    class="w-full px-3.5 py-2 bg-[#FAF9F5] border border-[#DDD8CB] rounded-xl text-xs text-charcoal-900 placeholder-charcoal-400 focus:outline-none focus:border-sage-600 pr-9 shadow-inner"
+                  >
+                  <button type="button" onclick="togglePasswordVisibility()" class="absolute right-2.5 top-7 text-charcoal-400 hover:text-charcoal-700 text-xs cursor-pointer">
+                    👁️
+                  </button>
+                </div>
+              </div>
+              <p class="text-[10px] text-[#A96D22] italic">
+                ⚠️ Note: For websites protected by Cloudflare Turnstile or CAPTCHA, please switch to the <strong>Session Cookies</strong> tab above.
+              </p>
+            </div>
+
+            <p class="text-[10px] text-charcoal-500 italic">
+              🔒 Security Guarantee: Credentials and session cookies are kept exclusively in temporary memory, never logged, and never included in exported Excel reports.
+            </p>
+          </div>
+        </div>
+
+      </form>
+    </div>
+
+    <!-- Mid-Crawl Auth Alert -->
+    <div id="midCrawlAuthAlert" class="hidden max-w-4xl mx-auto p-4 rounded-2xl bg-[#FDF5E6] border border-[#F3CCA0] text-[#8C5212] text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+      <div class="flex items-center gap-2.5">
+        <span class="text-xl">🔒</span>
+        <div>
+          <span class="font-bold text-charcoal-900">Access Restricted Pages Detected:</span>
+          <span class="text-charcoal-700 block sm:inline sm:ml-1">This website has pages requiring authentication (HTTP 401/403 or redirects to login).</span>
+        </div>
+      </div>
+      <button 
+        type="button" 
+        onclick="stopAndEnterCredentials()" 
+        class="px-4 py-2 bg-[#C2812E] hover:bg-[#A96D22] text-white font-bold rounded-xl text-xs whitespace-nowrap shadow cursor-pointer transition active:scale-95"
+      >
+        Enter Credentials & Crawl
+      </button>
+    </div>
+
+    <!-- Live Telemetry Status & Progress Section (Neka Timeline Bar) -->
+    <div class="space-y-4">
+      
+      <!-- Telemetry Progress Bar Card -->
+      <div class="neka-card rounded-2xl p-5 shadow-sm relative overflow-hidden">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 mb-3.5">
+          <div class="flex items-center gap-3">
+            <span id="statStatusBadge" class="px-3 py-1 text-xs font-bold rounded-full bg-[#F5F4EE] text-charcoal-600 border border-[#E8E4DB] uppercase tracking-wider inline-flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-charcoal-400"></span>
+              Idle
+            </span>
+            <span id="statTargetDisplay" class="text-xs font-semibold text-charcoal-700 font-mono truncate max-w-sm flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5 text-sage-700 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+              No active website
+            </span>
+          </div>
+
+          <div class="flex items-center gap-2 sm:gap-3 text-xs font-mono text-charcoal-600">
+            <span id="queueInfo" class="px-2.5 py-1 rounded-lg bg-[#FAF9F5] border border-[#E8E4DB]">Queue: 0</span>
+            <span id="statElapsed" class="px-2.5 py-1 rounded-lg bg-[#FAF9F5] border border-[#E8E4DB]">0.0s elapsed</span>
+            <span id="progressPercent" class="px-2.5 py-1 rounded-lg bg-sage-100 border border-sage-300 text-sage-800 font-bold">0%</span>
+          </div>
+        </div>
+
+        <!-- Progress Bar Track (Neka Soft Pill Meter) -->
+        <div class="w-full bg-[#F5F4EE] rounded-full h-2.5 p-0.5 overflow-hidden border border-[#E8E4DB]">
+          <div id="progressBar" class="bg-gradient-to-r from-sage-800 to-sage-500 h-full w-0 rounded-full transition-all duration-300"></div>
+        </div>
+
+        <!-- Limitations & Authentication Notes Banner -->
+        <div id="limitationsBanner" class="hidden mt-3 p-3 rounded-xl bg-[#FDF5E6] border border-[#F3CCA0] text-[11px] text-[#8C5212] flex items-center justify-between">
+          <span id="limitationsText">Crawl Notes</span>
+        </div>
+      </div>
+
+      <!-- Headline metrics (click to open the matching view) -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <button type="button" onclick="showCategory('all')" class="text-left grad-sage rounded-3xl p-5 text-white shadow-md transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-white/90">Discovered</span>
+          <div id="statDiscovered" class="text-3xl sm:text-4xl font-extrabold mt-2 font-display tracking-tight">0</div>
+          <div class="text-[11px] text-white/80 mt-1">internal URLs</div>
+        </button>
+        <button type="button" onclick="showCategory('all')" class="text-left grad-amber rounded-3xl p-5 text-white shadow-md transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-white/90">Crawled</span>
+          <div id="statCrawled" class="text-3xl sm:text-4xl font-extrabold mt-2 font-display tracking-tight">0</div>
+          <div class="text-[11px] text-white/80 mt-1">pages checked</div>
+        </button>
+        <button type="button" onclick="switchTab('external'); scrollToExplorer();" class="text-left grad-peach-blue rounded-3xl p-5 text-white shadow-md transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-white/90">External</span>
+          <div id="statExternal" class="text-3xl sm:text-4xl font-extrabold mt-2 font-display tracking-tight">0</div>
+          <div id="statExternalDomains" class="text-[11px] text-white/80 mt-1 truncate">0 domains · not crawled</div>
+        </button>
+        <button type="button" onclick="switchTab('issues'); scrollToExplorer();" class="text-left grad-rose rounded-3xl p-5 text-white shadow-md transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-white/90">Issues</span>
+          <div id="statFailed" class="text-3xl sm:text-4xl font-extrabold mt-2 font-display tracking-tight">0</div>
+          <div class="text-[11px] text-white/80 mt-1">4xx · 5xx · network</div>
+        </button>
+      </div>
+
+      <!-- Category cards: click one to show only that category in the table -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <button type="button" id="catCard2xx" onclick="showCategory('2xx')" style="--cat-color:#3D794F" class="cat-card text-left bg-white border border-[#E8E4DB] hover:border-sage-500 rounded-2xl p-4 shadow-sm transition cursor-pointer">
+          <div class="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-sage-800"><span>Healthy</span><span class="font-mono text-[10px] opacity-70">2xx</span></div>
+          <div id="stat2xx" class="text-2xl sm:text-3xl font-extrabold text-charcoal-900 font-display mt-2">0</div>
+          <div class="cat-meter mt-2"><span id="meter2xx" class="bg-sage-600" style="width:0%"></span></div>
+        </button>
+        <button type="button" id="catCard3xx" onclick="showCategory('3xx')" style="--cat-color:#C2812E" class="cat-card text-left bg-white border border-[#E8E4DB] hover:border-[#C2812E] rounded-2xl p-4 shadow-sm transition cursor-pointer">
+          <div class="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-[#A96D22]"><span>Redirects</span><span class="font-mono text-[10px] opacity-70">3xx</span></div>
+          <div id="stat3xx" class="text-2xl sm:text-3xl font-extrabold text-charcoal-900 font-display mt-2">0</div>
+          <div class="cat-meter mt-2"><span id="meter3xx" class="bg-[#C2812E]" style="width:0%"></span></div>
+        </button>
+        <button type="button" id="catCard4xx" onclick="showCategory('4xx')" style="--cat-color:#9C3345" class="cat-card text-left bg-white border border-[#E8E4DB] hover:border-[#9C3345] rounded-2xl p-4 shadow-sm transition cursor-pointer">
+          <div class="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-[#9C3345]"><span>Broken</span><span class="font-mono text-[10px] opacity-70">4xx</span></div>
+          <div id="stat4xx" class="text-2xl sm:text-3xl font-extrabold text-charcoal-900 font-display mt-2">0</div>
+          <div class="cat-meter mt-2"><span id="meter4xx" class="bg-[#9C3345]" style="width:0%"></span></div>
+        </button>
+        <button type="button" id="catCard5xx" onclick="showCategory('5xx')" style="--cat-color:#734399" class="cat-card text-left bg-white border border-[#E8E4DB] hover:border-[#734399] rounded-2xl p-4 shadow-sm transition cursor-pointer">
+          <div class="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-[#734399]"><span>Server errors</span><span class="font-mono text-[10px] opacity-70">5xx</span></div>
+          <div id="stat5xx" class="text-2xl sm:text-3xl font-extrabold text-charcoal-900 font-display mt-2">0</div>
+          <div class="cat-meter mt-2"><span id="meter5xx" class="bg-[#734399]" style="width:0%"></span></div>
+        </button>
+        <button type="button" id="catCarderror" onclick="showCategory('error')" style="--cat-color:#4D5650" class="cat-card text-left bg-white border border-[#E8E4DB] hover:border-charcoal-500 rounded-2xl p-4 shadow-sm transition cursor-pointer col-span-2 sm:col-span-1">
+          <div class="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-charcoal-600"><span>Network</span><span class="font-mono text-[10px] opacity-70">timeout</span></div>
+          <div id="statErr" class="text-2xl sm:text-3xl font-extrabold text-charcoal-900 font-display mt-2">0</div>
+          <div class="cat-meter mt-2"><span id="metererror" class="bg-charcoal-600" style="width:0%"></span></div>
+        </button>
+      </div>
+    </div>
+
+    <!-- Reports banner: building (screenshots) -> ready -->
+    <div id="exportBanner" class="hidden bg-white border border-sage-300 rounded-3xl p-5 sm:p-6 shadow-md">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div class="flex items-center gap-4">
+          <div id="reportIcon" class="w-12 h-12 rounded-2xl bg-sage-100 border border-sage-300 flex items-center justify-center shrink-0">
+            <svg class="w-6 h-6 text-sage-800" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </div>
+          <div>
+            <h3 id="reportTitle" class="font-display text-lg font-bold text-charcoal-900">Reports ready</h3>
+            <p id="reportSubtitle" class="text-xs text-charcoal-500">Excel by category · PDF with screenshots</p>
+          </div>
+        </div>
+        <div id="reportActions" class="flex flex-wrap items-center gap-2">
+          <a data-dl="pdf" class="dl-link inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#9C3345] hover:bg-[#832637] text-white font-bold text-xs shadow-md transition active:scale-95">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+            Issue report (PDF)
+          </a>
+          <a data-dl="all" class="dl-link inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-sage-800 hover:bg-sage-900 text-white font-bold text-xs shadow-md transition active:scale-95">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            Full Excel
+          </a>
+          <button type="button" onclick="resetUI()" class="px-4 py-2.5 rounded-full border border-[#DCD6C9] bg-white hover:bg-warm-100 text-charcoal-700 font-bold text-xs transition cursor-pointer active:scale-95">
+            New crawl
+          </button>
+        </div>
+      </div>
+      <div id="reportProgressWrap" class="hidden mt-4">
+        <div class="w-full bg-[#F5F4EE] rounded-full h-2 overflow-hidden border border-[#E8E4DB]">
+          <div id="reportProgressBar" class="bg-[#9C3345] h-full rounded-full transition-all duration-300" style="width:0%"></div>
+        </div>
+      </div>
+      <div id="categoryDownloads" class="mt-4 pt-4 border-t border-[#F0ECE3] flex flex-wrap items-center gap-2 text-xs">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-charcoal-400 mr-1">Excel by category</span>
+        <a data-dl="issues" class="dl-link px-3 py-1.5 rounded-full border border-[#F6C2C9] bg-[#FDECEE] text-[#9C3345] font-bold">All issues</a>
+        <a data-dl="4xx" class="dl-link px-3 py-1.5 rounded-full border border-[#F6C2C9] bg-white text-[#9C3345] font-semibold">4xx</a>
+        <a data-dl="5xx" class="dl-link px-3 py-1.5 rounded-full border border-[#DAC8F4] bg-white text-[#734399] font-semibold">5xx</a>
+        <a data-dl="error" class="dl-link px-3 py-1.5 rounded-full border border-[#DDD8CB] bg-white text-charcoal-700 font-semibold">Network</a>
+        <a data-dl="3xx" class="dl-link px-3 py-1.5 rounded-full border border-[#F3CCA0] bg-white text-[#A96D22] font-semibold">3xx</a>
+        <a data-dl="2xx" class="dl-link px-3 py-1.5 rounded-full border border-sage-300 bg-white text-sage-800 font-semibold">2xx</a>
+        <a data-dl="external" class="dl-link px-3 py-1.5 rounded-full border border-[#DDD8CB] bg-white text-charcoal-700 font-semibold">External</a>
+      </div>
+    </div>
+
+    <!-- Issue summary (visual) -->
+    <div id="issueSummary" class="hidden grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div class="neka-card rounded-3xl p-5 flex items-center gap-5">
+        <svg id="healthRing" viewBox="0 0 120 120" class="w-28 h-28 shrink-0 -rotate-90"></svg>
+        <div>
+          <div class="text-[11px] font-bold uppercase tracking-wider text-charcoal-500">Site health</div>
+          <div id="healthScore" class="font-display text-4xl font-extrabold text-charcoal-900">–</div>
+          <div id="healthCaption" class="text-xs text-charcoal-500 mt-0.5">pages without errors</div>
+        </div>
+      </div>
+      <div class="neka-card rounded-3xl p-5">
+        <div class="text-[11px] font-bold uppercase tracking-wider text-charcoal-500 mb-3">Top issues</div>
+        <div id="topIssueTypes" class="space-y-2"></div>
+      </div>
+      <div class="neka-card rounded-3xl p-5">
+        <div class="text-[11px] font-bold uppercase tracking-wider text-charcoal-500 mb-3">Pages with most broken links</div>
+        <div id="topParents" class="space-y-2"></div>
+      </div>
+    </div>
+
+    <!-- Data Explorer & Table Section (Neka Clean Warm Panel) -->
+    <div id="dataExplorer" class="neka-card rounded-3xl shadow-sm overflow-hidden border border-[#E8E4DB] scroll-mt-24">
+
+      <!-- Table Controls Bar -->
+      <div class="p-3.5 sm:p-4 border-b border-[#E8E4DB] flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3.5 bg-[#FAF9F5]">
+
+        <!-- Segmented Tab Selectors (Pill Container) -->
+        <div class="bg-[#EBE7DE] p-1 rounded-full flex items-center gap-1 overflow-x-auto">
+          <button type="button" id="tabBtnInternal" onclick="switchTab('internal')" class="px-4 py-2 rounded-full text-xs font-bold bg-white text-charcoal-900 shadow-sm border border-[#DDD8CB] flex items-center gap-2 cursor-pointer transition whitespace-nowrap">
+            <span>All URLs</span>
+            <span id="tabCountInternal" class="bg-sage-100 text-sage-800 px-2 py-0.5 rounded-full text-[10px] font-mono">0</span>
+          </button>
+          <button type="button" id="tabBtnIssues" onclick="switchTab('issues')" class="px-4 py-2 rounded-full text-xs font-semibold text-charcoal-600 hover:text-charcoal-900 hover:bg-white/60 flex items-center gap-2 cursor-pointer transition whitespace-nowrap">
+            <span>Issues</span>
+            <span id="tabCountErrors" class="bg-[#FDECEE] text-[#9C3345] px-2 py-0.5 rounded-full text-[10px] font-mono">0</span>
+          </button>
+          <button type="button" id="tabBtnExternal" onclick="switchTab('external')" class="px-4 py-2 rounded-full text-xs font-semibold text-charcoal-600 hover:text-charcoal-900 hover:bg-white/60 flex items-center gap-2 cursor-pointer transition whitespace-nowrap">
+            <span>External</span>
+            <span id="tabCountExternal" class="bg-[#DDD8CB] text-charcoal-700 px-2 py-0.5 rounded-full text-[10px] font-mono">0</span>
+          </button>
+          <button type="button" id="tabBtnLogs" onclick="switchTab('logs')" class="px-4 py-2 rounded-full text-xs font-semibold text-charcoal-600 hover:text-charcoal-900 hover:bg-white/60 flex items-center gap-2 cursor-pointer transition whitespace-nowrap">
+            <span>Log</span>
+          </button>
+        </div>
+
+        <!-- Right Side: Status Filter Pills + Search + Export -->
+        <div class="flex flex-wrap items-center gap-2 sm:gap-2.5">
+          <div id="statusFilterPills" class="flex items-center gap-1.5 overflow-x-auto">
+            <button type="button" onclick="filterByStatus('all')" id="filterPillAll" class="px-3 py-1.5 rounded-full text-xs font-bold bg-sage-800 text-white shadow-sm transition cursor-pointer">All</button>
+            <button type="button" onclick="filterByStatus('2xx')" id="filterPill2xx" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-charcoal-600 border border-[#DDD8CB] transition cursor-pointer shadow-sm">2xx</button>
+            <button type="button" onclick="filterByStatus('3xx')" id="filterPill3xx" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-charcoal-600 border border-[#DDD8CB] transition cursor-pointer shadow-sm">3xx</button>
+            <button type="button" onclick="filterByStatus('4xx')" id="filterPill4xx" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-charcoal-600 border border-[#DDD8CB] transition cursor-pointer shadow-sm">4xx</button>
+            <button type="button" onclick="filterByStatus('5xx')" id="filterPill5xx" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-charcoal-600 border border-[#DDD8CB] transition cursor-pointer shadow-sm">5xx</button>
+            <button type="button" onclick="filterByStatus('error')" id="filterPillerror" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-charcoal-600 border border-[#DDD8CB] transition cursor-pointer shadow-sm">Network</button>
+          </div>
+
+          <div class="relative w-full sm:w-56">
+            <input type="text" id="tableSearch" placeholder="Search URL, title, link text..." oninput="filterTable();" class="w-full bg-white border border-[#DDD8CB] rounded-full pl-9 pr-3 py-1.5 text-xs text-charcoal-900 placeholder-charcoal-400 focus:outline-none focus:border-sage-600 font-medium shadow-sm">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-charcoal-400">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            </div>
+          </div>
+
+          <!-- Download exactly what the table shows -->
+          <a id="btnTableDownload" class="hidden items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-warm-100 text-sage-800 border border-sage-300 text-xs font-bold transition whitespace-nowrap active:scale-95 shadow-sm cursor-pointer">
+            <svg class="w-3.5 h-3.5 text-sage-800" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            <span id="btnTableDownloadText">This view .xlsx</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Active view caption -->
+      <div id="viewCaption" class="px-4 py-2 border-b border-[#F0ECE3] bg-white flex items-center gap-2 text-xs text-charcoal-600">
+        <span id="viewCaptionDot" class="dot bg-charcoal-400 !mr-0"></span>
+        <span id="viewCaptionText" class="font-semibold">All URLs</span>
+        <span id="viewCaptionCount" class="font-mono text-charcoal-400"></span>
+        <button type="button" id="viewCaptionClear" onclick="clearFilters()" class="hidden ml-auto text-[11px] font-bold text-charcoal-500 hover:text-charcoal-900 cursor-pointer">Clear filter ✕</button>
+      </div>
+
+      <!-- Table Content View -->
+      <div id="tableContainer" class="overflow-x-auto max-h-[600px] overflow-y-auto bg-white">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead id="tableHeader" class="bg-[#FAF9F5] text-charcoal-500 uppercase font-bold text-[10px] tracking-wider sticky top-0 border-b border-[#E8E4DB] z-10"></thead>
+          <tbody id="resultsTableBody" class="divide-y divide-[#F0ECE3] font-medium">
+            <tr>
+              <td colspan="7" class="text-center py-20 text-charcoal-400">
+                <span class="text-xs">Enter a website above and click <strong>Start Crawling</strong>.</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Activity Log View (Inside Tab) -->
+      <div id="logsContainer" class="hidden p-4 bg-[#181C1A] text-sage-400 max-h-[540px] overflow-y-auto">
+        <pre id="logOutput" class="text-[11px] leading-relaxed whitespace-pre-wrap font-mono"></pre>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Overlays live outside <main> so they stack above the sticky header -->
+    <!-- Issue Detail Modal: why, fix, where the link is, screenshots -->
+    <div id="issueModal" class="fixed inset-0 z-50 hidden items-start sm:items-center justify-center p-3 sm:p-6 bg-charcoal-900/60 backdrop-blur-sm overflow-y-auto" onclick="if (event.target === this) closeIssueModal()">
+      <div class="bg-white border border-[#E8E4DB] rounded-3xl max-w-5xl w-full shadow-2xl overflow-hidden my-auto">
+        <div class="flex items-start gap-4 p-5 sm:p-6 border-b border-[#F0ECE3]">
+          <div id="imChip" class="px-3 py-2 rounded-xl text-white font-mono font-bold text-sm shrink-0">404</div>
+          <div class="min-w-0 flex-1">
+            <div class="flex flex-wrap items-center gap-2">
+              <h3 id="imTitle" class="font-display text-lg sm:text-xl font-bold text-charcoal-900">Page not found</h3>
+              <span id="imSeverity" class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border"></span>
+            </div>
+            <a id="imUrl" href="#" target="_blank" rel="noopener noreferrer" class="block text-xs font-mono text-sage-800 hover:underline break-all mt-1"></a>
+          </div>
+          <button type="button" onclick="closeIssueModal()" class="text-charcoal-400 hover:text-charcoal-900 text-xl leading-none cursor-pointer px-2" aria-label="Close">✕</button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5 p-5 sm:p-6">
+          <div class="space-y-3">
+            <div>
+              <div class="text-[10px] font-bold uppercase tracking-wider text-charcoal-400 mb-1">Why</div>
+              <p id="imSummary" class="text-sm text-charcoal-900 font-semibold"></p>
+              <ul id="imCauses" class="mt-1.5 space-y-1 text-xs text-charcoal-600"></ul>
+            </div>
+            <div class="p-3 rounded-2xl bg-sage-50 border border-sage-300/60">
+              <div class="text-[10px] font-bold uppercase tracking-wider text-sage-800 mb-0.5">Fix</div>
+              <p id="imFix" class="text-xs text-sage-900 font-semibold"></p>
+            </div>
+          </div>
+          <div class="space-y-2.5 text-xs">
+            <div>
+              <div class="text-[10px] font-bold uppercase tracking-wider text-charcoal-400 mb-0.5">Found on</div>
+              <a id="imParent" href="#" target="_blank" rel="noopener noreferrer" class="font-mono text-sage-800 hover:underline break-all"></a>
+            </div>
+            <div class="flex flex-wrap gap-x-6 gap-y-2">
+              <div>
+                <div class="text-[10px] font-bold uppercase tracking-wider text-charcoal-400 mb-0.5">Link text</div>
+                <div id="imAnchor" class="font-semibold text-charcoal-900"></div>
+              </div>
+              <div>
+                <div class="text-[10px] font-bold uppercase tracking-wider text-charcoal-400 mb-0.5">Position</div>
+                <div id="imPosition" class="font-semibold text-charcoal-900"></div>
+              </div>
+            </div>
+            <code id="imHtml" class="block font-mono text-[10.5px] bg-[#FAF9F5] border border-[#E8E4DB] rounded-xl px-3 py-2 text-charcoal-700 break-all"></code>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 px-5 sm:px-6 pb-6">
+          <div>
+            <div class="text-[10px] font-bold uppercase tracking-wider text-charcoal-400 mb-1.5">Where the link is</div>
+            <div id="imParentShot" class="shot-frame"></div>
+          </div>
+          <div>
+            <div class="text-[10px] font-bold uppercase tracking-wider text-charcoal-400 mb-1.5">What visitors see</div>
+            <div id="imErrorShot" class="shot-frame"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Interactive Authentication Prompt Modal -->
+    <div id="authPromptModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-charcoal-900/60 backdrop-blur-sm hidden">
+      <div class="bg-white border border-[#E8E4DB] rounded-3xl p-6 sm:p-7 max-w-lg w-full shadow-2xl space-y-4 relative">
+        <div class="flex items-start gap-4">
+          <div class="w-12 h-12 rounded-2xl bg-sage-100 border border-sage-300 flex items-center justify-center text-2xl flex-shrink-0">
+            🔐
+          </div>
+          <div class="space-y-1">
+            <h3 class="font-display text-base sm:text-lg font-bold text-charcoal-900">Login Credentials Available</h3>
+            <p class="text-xs text-charcoal-600 leading-relaxed" id="authPromptMessage">
+              This website contains a login portal. Would you like to provide login credentials to access and crawl protected pages, or crawl public pages only?
+            </p>
+            <div class="pt-2">
+              <div class="text-[11px] font-mono text-sage-800 bg-[#F5F4EE] px-3 py-2 rounded-xl border border-[#DDD8CB] break-all" id="authDetectedLoginUrl">
+                -
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-3 flex flex-col-reverse sm:flex-row gap-2.5 justify-end">
+          <button 
+            type="button" 
+            onclick="confirmPublicCrawl()" 
+            class="px-5 py-2.5 text-xs font-semibold rounded-full bg-white hover:bg-warm-100 text-charcoal-700 border border-[#DCD6C9] transition cursor-pointer text-center active:scale-95 shadow-sm"
+          >
+            Crawl Public Pages Only
+          </button>
+          <button 
+            type="button" 
+            onclick="openCredentialsAndFocus()" 
+            class="px-5 py-2.5 text-xs font-bold rounded-full bg-sage-800 hover:bg-sage-900 text-white shadow-md transition cursor-pointer text-center active:scale-95"
+          >
+            Enter Login / Session Cookies
+          </button>
+        </div>
+      </div>
+    </div>
+
+
+  <script>
+    // Hardcoded production backend connection
+    const BACKEND_BASE_URL = (
+      window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ) ? window.location.origin : "https://website-crawler-z8qf.onrender.com";
+
+    const apiUrl = (path) => `${BACKEND_BASE_URL}${path}`;
+
+    let pollInterval = null;
+    let isPaused = false;
+    let cachedInternal = [];
+    let cachedExternal = [];
+    let currentTab = 'internal';
+    let currentStatusFilter = 'all';
+    let authMode = 'form';
+    let backendOnline = false;
+    let isChecking = false;
+    let sessionActive = false;
+
+    // Silent background health check & auto-sync
+    async function checkBackendHealth() {
+      if (isChecking) return;
+      isChecking = true;
+
+      try {
+        const res = await fetch(apiUrl('/healthz'));
+        if (res.ok) {
+          backendOnline = true;
+          fetchStatus();
+        } else {
+          throw new Error(`HTTP ${res.status}`);
+        }
+      } catch (err) {
+        backendOnline = false;
+        setTimeout(checkBackendHealth, 4000);
+      } finally {
+        isChecking = false;
+      }
+    }
+
+    checkBackendHealth();
+
+    function toggleAuthSection() {
+      const authSec = document.getElementById('authSection');
+      const authChevron = document.getElementById('authChevron');
+      authSec.classList.toggle('hidden');
+      authChevron.classList.toggle('rotate-180');
+    }
+
+    function switchAuthTab(tab) {
+      authMode = tab;
+      const tabCookies = document.getElementById('tabAuthCookies');
+      const tabForm = document.getElementById('tabAuthForm');
+      const panelCookies = document.getElementById('authCookiesPanel');
+      const panelForm = document.getElementById('authFormPanel');
+
+      if (tab === 'cookies') {
+        if (tabCookies) tabCookies.className = "px-3.5 py-1.5 text-xs font-bold rounded-xl bg-sage-100 text-sage-800 border border-sage-400/50 transition flex items-center gap-2 cursor-pointer shadow-sm";
+        if (tabForm) tabForm.className = "px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-white text-charcoal-600 hover:text-charcoal-900 border border-[#E8E4DB] transition flex items-center gap-2 cursor-pointer";
+        if (panelCookies) panelCookies.classList.remove('hidden');
+        if (panelForm) panelForm.classList.add('hidden');
+      } else {
+        if (tabForm) tabForm.className = "px-3.5 py-1.5 text-xs font-bold rounded-xl bg-sage-100 text-sage-800 border border-sage-400/50 transition flex items-center gap-2 cursor-pointer shadow-sm";
+        if (tabCookies) tabCookies.className = "px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-white text-charcoal-600 hover:text-charcoal-900 border border-[#E8E4DB] transition flex items-center gap-2 cursor-pointer";
+        if (panelForm) panelForm.classList.remove('hidden');
+        if (panelCookies) panelCookies.classList.add('hidden');
+      }
+    }
+
+    let detectedLoginUrl = null;
+    let detectedPreferCookies = true;
+
+    function showAuthPrompt(url, loginUrl, reason, preferCookies = true) {
+      detectedLoginUrl = loginUrl || url;
+      detectedPreferCookies = preferCookies;
+      const modal = document.getElementById('authPromptModal');
+      const msg = document.getElementById('authPromptMessage');
+      const urlBox = document.getElementById('authDetectedLoginUrl');
+      
+      if (msg) {
+        if (preferCookies) {
+          msg.textContent = `This website contains a login portal protected by Cloudflare Turnstile / CAPTCHA (${reason || 'bot verification'}). To crawl member pages, providing your Session Cookie (Option A) is recommended.`;
+        } else {
+          msg.textContent = `This website contains a login portal (${reason || 'login credentials available'}). Would you like to provide session cookies or login credentials to crawl protected pages, or crawl public pages only?`;
+        }
+      }
+      if (urlBox) {
+        urlBox.textContent = detectedLoginUrl;
+      }
+      if (modal) modal.classList.remove('hidden');
+    }
+
+    function confirmPublicCrawl() {
+      const modal = document.getElementById('authPromptModal');
+      if (modal) modal.classList.add('hidden');
+      executeCrawlStart(true);
+    }
+
+    function openCredentialsAndFocus(preferCookies) {
+      const modal = document.getElementById('authPromptModal');
+      if (modal) modal.classList.add('hidden');
+
+      const authSec = document.getElementById('authSection');
+      const authChevron = document.getElementById('authChevron');
+      if (authSec) authSec.classList.remove('hidden');
+      if (authChevron) authChevron.classList.add('rotate-180');
+
+      const useCookies = (preferCookies !== undefined) ? preferCookies : (detectedPreferCookies !== false);
+      switchAuthTab(useCookies ? 'cookies' : 'form');
+
+      if (detectedLoginUrl) {
+        const loginUrlInput = document.getElementById('authLoginUrl');
+        if (loginUrlInput && !loginUrlInput.value) {
+          loginUrlInput.value = detectedLoginUrl;
+        }
+      }
+
+      const noticeBanner = document.getElementById('authNoticeBanner');
+      const noticeText = document.getElementById('authNoticeText');
+      if (noticeBanner) {
+        noticeBanner.classList.remove('hidden');
+        if (noticeText && detectedLoginUrl) {
+          noticeText.textContent = useCookies 
+            ? `Protected login portal detected (${detectedLoginUrl}). Paste your session cookie below to crawl authenticated member pages.`
+            : `Login portal detected (${detectedLoginUrl}). Enter your credentials or switch to Session Cookies.`;
+        }
+      }
+
+      if (useCookies) {
+        const cookiesInput = document.getElementById('authCookies');
+        if (cookiesInput) {
+          cookiesInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setTimeout(() => cookiesInput.focus(), 300);
+        }
+      } else {
+        const usernameInput = document.getElementById('authUsername');
+        if (usernameInput) {
+          usernameInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setTimeout(() => usernameInput.focus(), 300);
+        }
+      }
+    }
+
+    async function stopAndEnterCredentials() {
+      await stopCrawl();
+      const alertElem = document.getElementById('midCrawlAuthAlert');
+      if (alertElem) alertElem.classList.add('hidden');
+      openCredentialsAndFocus(true);
+    }
+
+    function togglePasswordVisibility() {
+      const p = document.getElementById('authPassword');
+      if (p) p.type = (p.type === 'password') ? 'text' : 'password';
+    }
+
+    // ------------------------------------------------------------------
+    // Categories, live data & reports
+    // ------------------------------------------------------------------
+    const CATS = {
+      '2xx':   {label: 'Healthy (2xx)',       short: '2xx',     color: '#3D794F', tint: 'bg-sage-100 text-sage-800 border-sage-300'},
+      '3xx':   {label: 'Redirects (3xx)',     short: '3xx',     color: '#C2812E', tint: 'bg-[#FDF5E6] text-[#A96D22] border-[#F3CCA0]'},
+      '4xx':   {label: 'Broken (4xx)',        short: '4xx',     color: '#9C3345', tint: 'bg-[#FDECEE] text-[#9C3345] border-[#F6C2C9]'},
+      '5xx':   {label: 'Server errors (5xx)', short: '5xx',     color: '#734399', tint: 'bg-[#F5EFFC] text-[#734399] border-[#DAC8F4]'},
+      'error': {label: 'Network errors',      short: 'Network', color: '#4D5650', tint: 'bg-[#EEF0EE] text-charcoal-700 border-[#DDD8CB]'}
+    };
+    const ISSUE_CATS = ['4xx', '5xx', 'error'];
+    const SEVERITY_RANK = {critical: 0, high: 1, medium: 2, low: 3};
+    const SEVERITY_STYLE = {
+      critical: 'bg-[#F5EFFC] text-[#734399] border-[#DAC8F4]',
+      high: 'bg-[#FDECEE] text-[#9C3345] border-[#F6C2C9]',
+      medium: 'bg-[#FDF5E6] text-[#A96D22] border-[#F3CCA0]',
+      low: 'bg-[#F5F4EE] text-charcoal-600 border-[#DDD8CB]'
+    };
+    const MAX_ROWS = 1000;
+    const OFF_PAGE_REGIONS = ['XML sitemap', 'Page <head> metadata', 'JavaScript bundle', 'Inline script'];
+
+    let resultsCursor = 0;
+    let externalCursor = 0;
+    let seenInternal = new Set();
+    let seenExternal = new Set();
+    let issueDetails = {};     // url -> item from /api/crawl/issues (screenshots + position)
+    let lastPhase = 'idle';
+    let screenshotNote = '';
+    let reportReady = false;
+    let currentTarget = '';
+    let activeChip = null;     // extra filter set from the summary panels: {label, test}
+    let renderedItems = [];
+
+    function esc(v) {
+      return String(v ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+    }
+    function isHttp(u) { return /^https?:\/\//i.test(u || ''); }
+    function shortUrl(u) {
+      try { const x = new URL(u); return (x.pathname + x.search) || '/'; } catch (e) { return u || ''; }
+    }
+    function categoryOf(r) { return r.category || (r.status_code ? 'error' : 'error'); }
+    function isIssue(r) { return ISSUE_CATS.includes(categoryOf(r)); }
+    function bySeverity(a, b) {
+      const sa = SEVERITY_RANK[(a.issue || {}).severity] ?? 9;
+      const sb = SEVERITY_RANK[(b.issue || {}).severity] ?? 9;
+      return sa - sb || (b.status_code || 999) - (a.status_code || 999) || a.url.localeCompare(b.url);
+    }
+
+    // ---------------- Downloads ----------------
+    function downloadUrl(kind) {
+      return kind === 'pdf'
+        ? apiUrl('/api/crawl/report/pdf')
+        : apiUrl('/api/crawl/report/excel?category=' + encodeURIComponent(kind));
+    }
+    function wireDownloadLinks() {
+      document.querySelectorAll('[data-dl]').forEach(a => { a.href = downloadUrl(a.dataset.dl); });
+    }
+    function toggleDownloadMenu(ev) {
+      ev.stopPropagation();
+      document.getElementById('downloadMenu').classList.toggle('hidden');
+    }
+    document.addEventListener('click', (e) => {
+      const pdfLink = e.target.closest && e.target.closest('[data-dl="pdf"]');
+      if (pdfLink && !reportReady) {
+        e.preventDefault();
+        alert('The PDF report is still being built (capturing screenshots). It will be ready in a moment.');
+      }
+      const menu = document.getElementById('downloadMenu');
+      if (menu && !(e.target.closest && e.target.closest('#btnTopDownload'))) menu.classList.add('hidden');
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeIssueModal(); });
+
+    // ---------------- Reset ----------------
+    function resetData() {
+      cachedInternal = [];
+      cachedExternal = [];
+      seenInternal = new Set();
+      seenExternal = new Set();
+      resultsCursor = 0;
+      externalCursor = 0;
+      issueDetails = {};
+      lastPhase = 'idle';
+      reportReady = false;
+      screenshotNote = '';
+      currentStatusFilter = 'all';
+      activeChip = null;
+      const logElem = document.getElementById('logOutput');
+      if (logElem) logElem.textContent = '';
+      document.getElementById('issueSummary').classList.add('hidden');
+      switchTab('internal');
+    }
+
+    async function resetUI() {
+      sessionActive = false;
+      currentTarget = '';
+      ['urlInput', 'authCookies', 'authUsername', 'authPassword', 'authLoginUrl', 'tableSearch'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      if (document.getElementById('chkSpaMode')) document.getElementById('chkSpaMode').checked = false;
+      document.getElementById('exportBanner').classList.add('hidden');
+      document.getElementById('btnTopDownload').classList.add('hidden');
+      document.getElementById('btnTableDownload').classList.add('hidden');
+      document.getElementById('limitationsBanner').classList.add('hidden');
+      resetData();
+      updateStats({});
+      setBadge('idle');
+      document.getElementById('statTargetDisplay').textContent = 'No active website';
+      document.getElementById('queueInfo').textContent = 'Queue: 0';
+      document.getElementById('statElapsed').textContent = '0.0s';
+      setProgress(0);
+      const btnStart = document.getElementById('btnStart');
+      if (btnStart) {
+        btnStart.classList.remove('hidden');
+        btnStart.disabled = false;
+        document.getElementById('btnStartText').textContent = 'Start Crawling';
+      }
+      document.getElementById('btnPause').classList.add('hidden');
+      document.getElementById('btnStop').classList.add('hidden');
+      try {
+        await fetch(apiUrl('/api/crawl/reset'), {method: 'POST'});
+      } catch(e) {}
+    }
+
+    // ---------------- Tabs & filters ----------------
+    const TAB_ACTIVE = "px-4 py-2 rounded-full text-xs font-bold bg-white text-charcoal-900 shadow-sm border border-[#DDD8CB] flex items-center gap-2 cursor-pointer transition whitespace-nowrap";
+    const TAB_IDLE = "px-4 py-2 rounded-full text-xs font-semibold text-charcoal-600 hover:text-charcoal-900 hover:bg-white/60 flex items-center gap-2 cursor-pointer transition whitespace-nowrap";
+    const TAB_HEADERS = {
+      internal: ['Status', 'Page', 'Found on · clicked element', 'Depth', 'Latency'],
+      issues: ['Status', 'Issue', 'Broken URL', 'Found on · clicked element', 'Fix', ''],
+      external: ['External URL', 'Domain', 'Found on', 'Link text']
+    };
+
+    function switchTab(tab) {
+      currentTab = tab;
+      const buttons = {internal: 'tabBtnInternal', issues: 'tabBtnIssues', external: 'tabBtnExternal', logs: 'tabBtnLogs'};
+      Object.entries(buttons).forEach(([k, id]) => {
+        const b = document.getElementById(id);
+        if (b) b.className = (k === tab) ? TAB_ACTIVE : TAB_IDLE;
+      });
+      const tContainer = document.getElementById('tableContainer');
+      const lContainer = document.getElementById('logsContainer');
+      const caption = document.getElementById('viewCaption');
+      if (tab === 'logs') {
+        tContainer.classList.add('hidden');
+        caption.classList.add('hidden');
+        lContainer.classList.remove('hidden');
+        updateCategoryCards();
+        return;
+      }
+      tContainer.classList.remove('hidden');
+      caption.classList.remove('hidden');
+      lContainer.classList.add('hidden');
+
+      const heads = TAB_HEADERS[tab];
+      document.getElementById('tableHeader').innerHTML = '<tr>' + heads.map((h, i) =>
+        `<th class="py-3 px-4 ${(tab === 'internal' && i >= 3) ? 'text-right' : ''}">${h}</th>`).join('') + '</tr>';
+
+      const pills = document.getElementById('statusFilterPills');
+      if (pills) pills.classList.toggle('hidden', tab !== 'internal');
+      updateFilterPillsUI();
+      updateCategoryCards();
+      filterTable();
+    }
+
+    function scrollToExplorer() {
+      document.getElementById('dataExplorer').scrollIntoView({behavior: 'smooth', block: 'start'});
+    }
+
+    // Category cards / headline cards: show only that category below
+    function showCategory(cat) {
+      activeChip = null;
+      currentStatusFilter = cat;
+      switchTab('internal');
+      scrollToExplorer();
+    }
+
+    function filterByStatus(status) {
+      currentStatusFilter = status;
+      activeChip = null;
+      if (currentTab !== 'internal') {
+        switchTab('internal');
+        return;
+      }
+      updateFilterPillsUI();
+      updateCategoryCards();
+      filterTable();
+    }
+
+    function clearFilters() {
+      currentStatusFilter = 'all';
+      activeChip = null;
+      document.getElementById('tableSearch').value = '';
+      updateFilterPillsUI();
+      updateCategoryCards();
+      filterTable();
+    }
+
+    function updateFilterPillsUI() {
+      ['all', '2xx', '3xx', '4xx', '5xx', 'error'].forEach(k => {
+        const btn = document.getElementById('filterPill' + (k === 'all' ? 'All' : k));
+        if (!btn) return;
+        if (k === currentStatusFilter) {
+          btn.className = k === 'all'
+            ? "px-3 py-1.5 rounded-full text-xs font-bold bg-sage-800 text-white shadow-sm transition cursor-pointer"
+            : `px-3 py-1.5 rounded-full text-xs font-bold border shadow-sm transition cursor-pointer ${CATS[k].tint}`;
+        } else {
+          btn.className = "px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-charcoal-600 hover:text-charcoal-900 border border-[#DDD8CB] transition cursor-pointer shadow-sm";
+        }
+      });
+    }
+
+    function updateCategoryCards() {
+      Object.keys(CATS).forEach(k => {
+        const card = document.getElementById('catCard' + k);
+        if (card) card.classList.toggle('is-active', currentTab === 'internal' && currentStatusFilter === k);
+      });
+    }
+
+    function viewCategory() {
+      if (currentTab === 'external') return 'external';
+      if (currentTab === 'issues') return 'issues';
+      return currentStatusFilter;
+    }
+
+    function currentList() {
+      let list;
+      if (currentTab === 'external') {
+        list = cachedExternal.slice().reverse();
+      } else if (currentTab === 'issues') {
+        list = cachedInternal.filter(isIssue).sort(bySeverity);
+      } else {
+        list = currentStatusFilter === 'all'
+          ? cachedInternal.slice().reverse()
+          : cachedInternal.filter(r => categoryOf(r) === currentStatusFilter).reverse();
+      }
+      if (activeChip && currentTab !== 'external') list = list.filter(activeChip.test);
+      const q = (document.getElementById('tableSearch').value || '').trim().toLowerCase();
+      if (q) {
+        list = list.filter(it => [it.url, it.page_title, it.http_status, it.parent_url, it.anchor_text, it.domain,
+          it.link_region, it.issue && it.issue.title].some(v => v && String(v).toLowerCase().includes(q)));
+      }
+      return list;
+    }
+
+    function filterTable() {
+      if (currentTab === 'logs') return;
+      const list = currentList();
+      renderedItems = list.slice(0, MAX_ROWS);
+      renderTable(renderedItems);
+      updateViewCaption(list.length);
+    }
+
+    function updateViewCaption(count) {
+      let label = 'All URLs', color = '#8A948D';
+      if (currentTab === 'external') { label = 'External links (not crawled)'; color = '#734399'; }
+      else if (currentTab === 'issues') { label = 'Issues · 4xx, 5xx & network'; color = '#9C3345'; }
+      else if (currentStatusFilter !== 'all') { label = CATS[currentStatusFilter].label; color = CATS[currentStatusFilter].color; }
+      if (activeChip) label += ' · ' + activeChip.label;
+      document.getElementById('viewCaptionText').textContent = label;
+      document.getElementById('viewCaptionDot').style.background = color;
+      document.getElementById('viewCaptionCount').textContent =
+        `${count.toLocaleString()} row${count === 1 ? '' : 's'}` + (count > MAX_ROWS ? ` · showing first ${MAX_ROWS} (download for all)` : '');
+      const filtered = (currentTab === 'internal' && currentStatusFilter !== 'all') || activeChip ||
+        (document.getElementById('tableSearch').value || '').trim();
+      document.getElementById('viewCaptionClear').classList.toggle('hidden', !filtered);
+
+      const cat = viewCategory();
+      const dl = document.getElementById('btnTableDownload');
+      dl.href = downloadUrl(cat);
+      document.getElementById('btnTableDownloadText').textContent =
+        cat === 'all' ? 'All .xlsx' : `${cat === 'issues' ? 'Issues' : cat === 'external' ? 'External' : (CATS[cat] || {}).short || cat} .xlsx`;
+    }
+
+    // ---------------- Table rendering ----------------
+    function statusBadge(r) {
+      const cat = CATS[categoryOf(r)] || CATS.error;
+      return `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono border whitespace-nowrap ${cat.tint}">
+        <span class="w-1.5 h-1.5 rounded-full" style="background:${cat.color}"></span>${esc(r.http_status || 'Error')}</span>`;
+    }
+
+    function foundOnCell(r) {
+      const parent = r.parent_url || '-';
+      const link = isHttp(parent)
+        ? `<a href="${esc(parent)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" title="${esc(parent)}" class="block truncate font-mono text-[10.5px] text-sage-800 hover:underline">${esc(shortUrl(parent))}</a>`
+        : `<span class="block truncate text-[10.5px] text-charcoal-500" title="${esc(parent)}">${esc(parent)}</span>`;
+      let via = '';
+      if (r.anchor_text || r.link_region) {
+        via = `<div class="truncate text-[10.5px] text-charcoal-500 mt-0.5">` +
+          (r.anchor_text ? `via “<span class="text-charcoal-800 font-semibold">${esc(r.anchor_text)}</span>” ` : '') +
+          (r.link_region ? `<span class="px-1.5 py-px rounded bg-[#F5F4EE] border border-[#E8E4DB] text-[9.5px]">${esc(r.link_region)}</span>` : '') +
+          `</div>`;
+      }
+      return link + via;
+    }
+
+    function emptyRow(text) {
+      return `<tr><td colspan="7" class="text-center py-16 text-charcoal-400 text-xs">${text}</td></tr>`;
+    }
+
+    function renderTable(items) {
+      const tbody = document.getElementById('resultsTableBody');
+      if (!items || items.length === 0) {
+        const msg = cachedInternal.length
+          ? (currentTab === 'issues' ? '✅ No broken links or server errors found.' : 'Nothing in this view.')
+          : 'Enter a website above and click <strong>Start Crawling</strong>.';
+        tbody.innerHTML = emptyRow(msg);
+        return;
+      }
+
+      if (currentTab === 'external') {
+        tbody.innerHTML = items.map(e => `
+          <tr class="hover:bg-warm-100/70 transition-colors">
+            <td class="py-3 px-4 max-w-md truncate"><a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer" class="text-[#734399] hover:underline font-mono text-[11px] font-medium">${esc(e.url)}</a></td>
+            <td class="py-3 px-4"><span class="bg-[#F5EFFC] border border-[#DAC8F4] text-[#734399] px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold">${esc(e.domain || 'external')}</span></td>
+            <td class="py-3 px-4 max-w-xs">${foundOnCell({parent_url: e.parent_url})}</td>
+            <td class="py-3 px-4 max-w-xs truncate text-charcoal-700">${esc(e.anchor_text || '-')}</td>
+          </tr>`).join('');
+        return;
+      }
+
+      if (currentTab === 'issues') {
+        tbody.innerHTML = items.map((r, i) => {
+          const d = r.issue || {};
+          const det = issueDetails[r.url] || {};
+          const hasShot = det.parent_shot || det.error_shot;
+          return `
+          <tr class="issue-row transition-colors" onclick="openIssue(${i})">
+            <td class="py-3 px-4 whitespace-nowrap">${statusBadge(r)}</td>
+            <td class="py-3 px-4 whitespace-nowrap">
+              <div class="font-semibold text-charcoal-900">${esc(d.title || 'Issue')}</div>
+              <span class="inline-block mt-0.5 px-1.5 py-px rounded border text-[9px] font-bold uppercase tracking-wider ${SEVERITY_STYLE[d.severity] || SEVERITY_STYLE.low}">${esc(d.severity || '')}</span>
+            </td>
+            <td class="py-3 px-4 max-w-[220px]"><a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" title="${esc(r.url)}" class="block truncate font-mono text-[10.5px] text-[#9C3345] hover:underline">${esc(shortUrl(r.url))}</a></td>
+            <td class="py-3 px-4 max-w-[260px]">${foundOnCell(r)}</td>
+            <td class="py-3 px-4 max-w-[260px] text-[11px] text-charcoal-600"><div class="line-clamp-2">${esc(d.fix || '')}</div></td>
+            <td class="py-3 px-4 text-right whitespace-nowrap text-[11px] font-bold text-[#9C3345]">${hasShot ? '📷 ' : ''}View →</td>
+          </tr>`;
+        }).join('');
+        return;
+      }
+
+      tbody.innerHTML = items.map((r, i) => {
+        const issue = isIssue(r);
+        const redirect = r.redirect_destination && r.redirect_destination !== '-'
+          ? `<div class="truncate text-[10px] text-[#A96D22] mt-0.5" title="${esc(r.redirect_destination)}">→ ${esc(shortUrl(r.redirect_destination))}</div>` : '';
+        return `
+          <tr class="${issue ? 'issue-row' : 'hover:bg-warm-100/70'} transition-colors" ${issue ? `onclick="openIssue(${i})"` : ''}>
+            <td class="py-3 px-4 whitespace-nowrap">${statusBadge(r)}</td>
+            <td class="py-3 px-4 max-w-sm">
+              <div class="truncate font-semibold text-charcoal-900" title="${esc(r.page_title)}">${esc(r.page_title || '-')}</div>
+              <a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" title="${esc(r.url)}" class="block truncate font-mono text-[10.5px] text-sage-800 hover:underline">${esc(r.url)}</a>
+              ${redirect}
+            </td>
+            <td class="py-3 px-4 max-w-xs">${foundOnCell(r)}</td>
+            <td class="py-3 px-4 text-right font-mono text-charcoal-600">${esc(r.depth)}</td>
+            <td class="py-3 px-4 text-right font-mono text-charcoal-500 whitespace-nowrap">${r.response_time_ms ? r.response_time_ms + 'ms' : '-'}${issue ? '<div class="text-[10px] font-sans font-bold text-[#9C3345]">View →</div>' : ''}</td>
+          </tr>`;
+      }).join('');
+    }
+
+    // ---------------- Visual summary ----------------
+    function renderSummary(s) {
+      const total = cachedInternal.length;
+      const panel = document.getElementById('issueSummary');
+      if (!total) { panel.classList.add('hidden'); return; }
+      panel.classList.remove('hidden');
+
+      const counts = {'2xx': 0, '3xx': 0, '4xx': 0, '5xx': 0, 'error': 0};
+      cachedInternal.forEach(r => { counts[categoryOf(r)] = (counts[categoryOf(r)] || 0) + 1; });
+
+      // Health ring
+      const C = 2 * Math.PI * 50;
+      let offset = 0, arcs = `<circle cx="60" cy="60" r="50" fill="none" stroke="#F0ECE3" stroke-width="14"/>`;
+      Object.keys(CATS).forEach(k => {
+        if (!counts[k]) return;
+        const len = C * counts[k] / total;
+        arcs += `<circle cx="60" cy="60" r="50" fill="none" stroke="${CATS[k].color}" stroke-width="14" stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-offset}"><title>${CATS[k].label}: ${counts[k]}</title></circle>`;
+        offset += len;
+      });
+      document.getElementById('healthRing').innerHTML = arcs;
+      const score = Math.round((counts['2xx'] + counts['3xx']) / total * 100);
+      const scoreEl = document.getElementById('healthScore');
+      scoreEl.textContent = score + '%';
+      scoreEl.style.color = score >= 90 ? '#3D794F' : (score >= 70 ? '#C2812E' : '#9C3345');
+      const issueCount = counts['4xx'] + counts['5xx'] + counts['error'];
+      document.getElementById('healthCaption').textContent =
+        issueCount ? `${issueCount} issue${issueCount === 1 ? '' : 's'} in ${total} pages` : `All ${total} pages OK`;
+
+      // Top issue types
+      const issues = cachedInternal.filter(isIssue);
+      const types = {};
+      issues.forEach(r => {
+        const d = r.issue || {};
+        const key = (r.status_code || 'ERR') + '|' + (d.title || r.http_status);
+        types[key] = types[key] || {code: r.status_code, title: d.title || r.http_status, cat: categoryOf(r), n: 0};
+        types[key].n++;
+      });
+      const topTypes = Object.values(types).sort((a, b) => b.n - a.n).slice(0, 5);
+      const maxT = Math.max(1, ...topTypes.map(t => t.n));
+      document.getElementById('topIssueTypes').innerHTML = topTypes.length ? topTypes.map((t, i) => `
+        <button type="button" onclick="applyChip('type', ${i})" class="w-full text-left group cursor-pointer">
+          <div class="flex items-center justify-between text-xs">
+            <span class="truncate"><span class="font-mono font-bold mr-1.5" style="color:${CATS[t.cat].color}">${esc(t.code || 'ERR')}</span><span class="font-semibold text-charcoal-800 group-hover:underline">${esc(t.title)}</span></span>
+            <span class="font-mono font-bold text-charcoal-900 ml-2">${t.n}</span>
+          </div>
+          <div class="cat-meter mt-1"><span style="width:${Math.round(t.n / maxT * 100)}%;background:${CATS[t.cat].color}"></span></div>
+        </button>`).join('') : '<div class="text-xs text-sage-800 font-semibold">✅ No issues found</div>';
+      window._topTypes = topTypes;
+
+      // Pages containing the most broken links
+      const parents = {};
+      issues.forEach(r => { if (isHttp(r.parent_url)) parents[r.parent_url] = (parents[r.parent_url] || 0) + 1; });
+      const topParents = Object.entries(parents).sort((a, b) => b[1] - a[1]).slice(0, 5);
+      const maxP = Math.max(1, ...topParents.map(p => p[1]));
+      document.getElementById('topParents').innerHTML = topParents.length ? topParents.map(([p, n], i) => `
+        <button type="button" onclick="applyChip('parent', ${i})" class="w-full text-left group cursor-pointer">
+          <div class="flex items-center justify-between text-xs">
+            <span class="truncate font-mono text-[11px] text-sage-800 group-hover:underline" title="${esc(p)}">${esc(shortUrl(p))}</span>
+            <span class="font-mono font-bold text-charcoal-900 ml-2">${n}</span>
+          </div>
+          <div class="cat-meter mt-1"><span style="width:${Math.round(n / maxP * 100)}%;background:#9C3345"></span></div>
+        </button>`).join('') : '<div class="text-xs text-charcoal-400">No broken links on crawled pages</div>';
+      window._topParents = topParents;
+    }
+
+    function applyChip(kind, i) {
+      if (kind === 'type') {
+        const t = window._topTypes[i];
+        activeChip = {label: `${t.code || 'ERR'} ${t.title}`, test: r => (r.status_code || 'ERR') === (t.code || 'ERR') && ((r.issue || {}).title || r.http_status) === t.title};
+      } else {
+        const [parent] = window._topParents[i];
+        activeChip = {label: 'on ' + shortUrl(parent), test: r => r.parent_url === parent};
+      }
+      switchTab('issues');
+      scrollToExplorer();
+    }
+
+    // ---------------- Issue detail modal ----------------
+    function positionText(r, pos) {
+      const region = r.link_region || 'Not recorded';
+      if (pos && pos.found) {
+        const pct = Math.min(100, Math.round(pos.top / Math.max(1, pos.page_height) * 100));
+        return `${region} · ${pos.top.toLocaleString()}px down (${pct}%)` + (pos.hidden ? ' · in a hidden/collapsed menu' : '');
+      }
+      if (pos && pos.found === false) return `${region} · not visible in the rendered page`;
+      return region;
+    }
+
+    function wireframeHtml(region, pos) {
+      if (OFF_PAGE_REGIONS.includes(region)) {
+        return `<div class="p-6 text-center text-xs text-charcoal-500"><div class="font-bold text-charcoal-800 mb-1">Not visible on the page</div>Link comes from: ${esc(region)}</div>`;
+      }
+      const band = (name, cls) => {
+        const hit = name === region || (name === 'Main content' && !['Header', 'Navigation menu', 'Footer', 'Sidebar', 'Breadcrumb'].includes(region) && region);
+        return `<div class="${cls} rounded-md text-[10px] px-2 flex items-center ${hit ? 'bg-[#F6C2C9] border-2 border-[#9C3345] text-[#9C3345] font-bold' : 'bg-[#EBE7DE] text-charcoal-500'}">${name}${hit ? ' ← link' : ''}</div>`;
+      };
+      return `<div class="w-full p-3 space-y-1.5 relative">
+        ${band('Header', 'h-8')}${band('Navigation menu', 'h-5')}
+        <div class="flex gap-1.5">${band('Main content', 'h-24 flex-1')}${band('Sidebar', 'h-24 w-1/4')}</div>
+        ${band('Footer', 'h-8')}</div>`;
+    }
+
+    function shotHtml(src, fallback) {
+      if (src) {
+        const url = apiUrl(src);
+        return `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer"><img src="${esc(url)}" alt="Screenshot" loading="lazy"></a>`;
+      }
+      return fallback;
+    }
+
+    function openIssue(i) {
+      const r = renderedItems[i];
+      if (!r || !isIssue(r)) return;
+      const det = issueDetails[r.url] || {};
+      const d = r.issue || {};
+      const cat = CATS[categoryOf(r)];
+
+      const chip = document.getElementById('imChip');
+      chip.textContent = r.status_code || 'ERR';
+      chip.style.background = cat.color;
+      document.getElementById('imTitle').textContent = d.title || r.http_status || 'Issue';
+      const sev = document.getElementById('imSeverity');
+      sev.textContent = d.severity || '';
+      sev.className = `px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${SEVERITY_STYLE[d.severity] || SEVERITY_STYLE.low}`;
+      const urlEl = document.getElementById('imUrl');
+      urlEl.textContent = r.url;
+      urlEl.href = isHttp(r.url) ? r.url : '#';
+      document.getElementById('imSummary').textContent = d.summary || r.error_message || '';
+      document.getElementById('imCauses').innerHTML = (d.causes || []).map(c => `<li>• ${esc(c)}</li>`).join('');
+      document.getElementById('imFix').textContent = d.fix || '';
+      const parentEl = document.getElementById('imParent');
+      parentEl.textContent = r.parent_url || '-';
+      parentEl.href = isHttp(r.parent_url) ? r.parent_url : '#';
+      document.getElementById('imAnchor').textContent = r.anchor_text ? `“${r.anchor_text}”` : '–';
+      document.getElementById('imPosition').textContent = positionText(r, det.position);
+      const htmlEl = document.getElementById('imHtml');
+      htmlEl.textContent = r.link_html || '';
+      htmlEl.classList.toggle('hidden', !r.link_html);
+
+      const pending = lastPhase !== 'done';
+      const waiting = `<div class="p-6 text-center text-xs text-charcoal-500"><span class="pulse-indicator inline-block w-2 h-2 rounded-full bg-[#9C3345] mr-2"></span>Capturing screenshot…</div>`;
+      const note = screenshotNote ? `<div class="px-4 pb-3 text-[10.5px] text-charcoal-400">${esc(screenshotNote)}</div>` : '';
+      document.getElementById('imParentShot').innerHTML = shotHtml(det.parent_shot,
+        pending ? waiting : `<div class="w-full">${wireframeHtml(r.link_region || '', det.position)}${note}</div>`);
+      document.getElementById('imErrorShot').innerHTML = shotHtml(det.error_shot,
+        pending ? waiting : `<div class="p-6 text-center text-xs text-charcoal-400">No screenshot captured${screenshotNote ? '<br>' + esc(screenshotNote) : ''}</div>`);
+
+      const modal = document.getElementById('issueModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeIssueModal() {
+      const modal = document.getElementById('issueModal');
+      if (!modal) return;
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    async function loadIssueDetails() {
+      try {
+        const res = await fetch(apiUrl('/api/crawl/issues'));
+        if (!res.ok) return;
+        const data = await res.json();
+        issueDetails = {};
+        (data.issues || []).forEach(it => { issueDetails[it.url] = it; });
+        screenshotNote = data.screenshot_note || screenshotNote;
+      } catch (e) {}
+    }
+
+    // ---------------- Start / stop ----------------
+    async function startCrawl(skipAuthInspect = false) {
+      let url = document.getElementById('urlInput').value.trim();
+      if (!url) {
+        alert('Please enter a target website address.');
+        return;
+      }
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+        document.getElementById('urlInput').value = url;
+      }
+
+      const btnStart = document.getElementById('btnStart');
+      const btnStartText = document.getElementById('btnStartText');
+
+      // Check if credentials or session cookies have already been entered
+      const cookies = (document.getElementById('authCookies') || {}).value || '';
+      const username = (document.getElementById('authUsername') || {}).value || '';
+      const password = (document.getElementById('authPassword') || {}).value || '';
+      const hasAuth = (cookies.trim().length > 0) || (username.trim().length > 0 && password.length > 0);
+
+      // If user hasn't provided credentials or cookies and hasn't skipped inspect:
+      if (!hasAuth && !skipAuthInspect) {
+        if (btnStart) {
+          btnStart.disabled = true;
+          btnStartText.textContent = "Checking login requirement...";
+        }
+
+        try {
+          const inspectRes = await fetch(apiUrl('/api/auth/inspect'), {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({url: url})
+          });
+          const inspectData = await inspectRes.json();
+          if (btnStart) {
+            btnStart.disabled = false;
+            btnStartText.textContent = "Start Crawling";
+          }
+          if (inspectData && inspectData.requires_auth) {
+            const preferCookies = (inspectData.auth_type === 'cookies' || inspectData.has_captcha);
+            showAuthPrompt(url, inspectData.login_url, inspectData.reason, preferCookies);
+            return;
+          }
+        } catch(e) {
+          if (btnStart) {
+            btnStart.disabled = false;
+            btnStartText.textContent = "Start Crawling";
+          }
+        }
+      }
+
+      await executeCrawlStart(skipAuthInspect);
+    }
+
+    async function executeCrawlStart(skipAuth = false) {
+      let url = document.getElementById('urlInput').value.trim();
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
+
+      sessionActive = true;
+
+      const btnStart = document.getElementById('btnStart');
+      const btnStartText = document.getElementById('btnStartText');
+      if (btnStart) {
+        btnStart.disabled = true;
+        btnStartText.textContent = "Starting Engine...";
+      }
+
+      // Collect optional authentication parameters (Session Cookies or Username/Password)
+      let authPayload = null;
+      if (!skipAuth) {
+        const cookies = (document.getElementById('authCookies') || {}).value || '';
+        const username = (document.getElementById('authUsername') || {}).value || '';
+        const password = (document.getElementById('authPassword') || {}).value || '';
+        const loginUrl = (document.getElementById('authLoginUrl') || {}).value || '';
+
+        if (cookies.trim()) {
+          authPayload = {
+            enabled: true,
+            auth_type: 'cookies',
+            cookies: cookies.trim(),
+            login_url: loginUrl.trim() || null
+          };
+        } else if (username.trim() && password) {
+          authPayload = {
+            enabled: true,
+            auth_type: 'form',
+            login_url: loginUrl.trim() || null,
+            username: username.trim(),
+            password: password
+          };
+        }
+      }
+
+      const enableSpa = document.getElementById('chkSpaMode') ? document.getElementById('chkSpaMode').checked : false;
+
+      const payload = {
+        url: url,
+        auth: authPayload,
+        enable_spa_mode: enableSpa,
+        screenshots: true,
+        force: true
+      };
+
+      try {
+        const res = await fetch(apiUrl('/api/crawl/start'), {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert('Error: ' + (data.detail || 'Could not start crawler engine'));
+          if (btnStart) {
+            btnStart.disabled = false;
+            btnStartText.textContent = "Start Crawling";
+          }
+          return;
+        }
+
+        document.getElementById('btnStart').classList.add('hidden');
+        document.getElementById('btnPause').classList.remove('hidden');
+        document.getElementById('btnStop').classList.remove('hidden');
+        document.getElementById('exportBanner').classList.add('hidden');
+        document.getElementById('btnTopDownload').classList.add('hidden');
+        document.getElementById('btnTableDownload').classList.add('hidden');
+
+        const midAlert = document.getElementById('midCrawlAuthAlert');
+        if (midAlert) midAlert.classList.add('hidden');
+
+        if (btnStart) {
+          btnStart.disabled = false;
+          btnStartText.textContent = "Start Crawling";
+        }
+
+        currentTarget = data.target || url;
+        resetData();
+
+        if (pollInterval) clearInterval(pollInterval);
+        pollInterval = setInterval(fetchStatus, 1000);
+        setTimeout(fetchStatus, 300);
+      } catch(err) {
+        alert('Failed to connect to crawler server: ' + err);
+        if (btnStart) {
+          btnStart.disabled = false;
+          btnStartText.textContent = "Start Crawling";
+        }
+      }
+    }
+
+    async function stopCrawl() {
+      const btnStop = document.getElementById('btnStop');
+      if (btnStop) {
+        btnStop.disabled = true;
+        btnStop.textContent = "Stopping...";
+      }
+      try {
+        await fetch(apiUrl('/api/crawl/stop'), {method: 'POST'});
+        await fetchStatus();
+      } catch(err) {
+        console.error("Stop error:", err);
+      } finally {
+        if (btnStop) btnStop.disabled = false;
+      }
+    }
+
+    async function togglePause() {
+      const endpoint = isPaused ? '/api/crawl/resume' : '/api/crawl/pause';
+      await fetch(apiUrl(endpoint), {method: 'POST'});
+      isPaused = !isPaused;
+      document.getElementById('pauseBtnText').textContent = isPaused ? 'Resume' : 'Pause';
+    }
+
+    // ---------------- Live status ----------------
+    const BADGES = {
+      running:   ['bg-sage-100 text-sage-800 border-sage-300', 'bg-sage-600 pulse-indicator', 'Running'],
+      paused:    ['bg-[#FDF5E6] text-[#A96D22] border-[#F3CCA0]', 'bg-[#C2812E]', 'Paused'],
+      analyzing: ['bg-[#FDECEE] text-[#9C3345] border-[#F6C2C9]', 'bg-[#9C3345] pulse-indicator', 'Building report'],
+      completed: ['bg-sage-100 text-sage-800 border-sage-300', 'bg-sage-600', 'Completed'],
+      stopped:   ['bg-[#FDECEE] text-[#9C3345] border-[#F6C2C9]', 'bg-[#9C3345]', 'Stopped'],
+      idle:      ['bg-[#F5F4EE] text-charcoal-600 border-[#E8E4DB]', 'bg-charcoal-400', 'Idle']
+    };
+
+    function setBadge(st) {
+      const [cls, dot, label] = BADGES[st] || BADGES.idle;
+      const badge = document.getElementById('statStatusBadge');
+      badge.className = `px-3 py-1 text-xs font-bold rounded-full border uppercase tracking-wider inline-flex items-center gap-1.5 ${cls}`;
+      badge.innerHTML = `<span class="w-2 h-2 rounded-full ${dot}"></span> ${label}`;
+    }
+
+    function setProgress(pct) {
+      document.getElementById('progressPercent').textContent = pct + '%';
+      document.getElementById('progressBar').style.width = pct + '%';
+    }
+
+    function updateStats(s) {
+      const crawled = s.total_crawled || 0;
+      const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = (v || 0).toLocaleString(); };
+      set('statDiscovered', s.total_discovered);
+      set('statCrawled', crawled);
+      set('statExternal', s.total_external);
+      set('statFailed', s.failed_count);
+      const map = {'2xx': s.status_2xx, '3xx': s.status_3xx, '4xx': s.status_4xx, '5xx': s.status_5xx, 'error': s.status_err};
+      Object.entries(map).forEach(([k, v]) => {
+        set(k === 'error' ? 'statErr' : 'stat' + k, v);
+        const meter = document.getElementById('meter' + k);
+        if (meter) meter.style.width = (crawled ? Math.round((v || 0) / crawled * 100) : 0) + '%';
+      });
+      document.getElementById('statExternalDomains').textContent = `${s.unique_external_domains || 0} domains · not crawled`;
+      set('tabCountInternal', s.total_crawled || cachedInternal.length);
+      set('tabCountErrors', s.failed_count);
+      set('tabCountExternal', s.total_external || cachedExternal.length);
+    }
+
+    function updateControls(st) {
+      const btnStart = document.getElementById('btnStart');
+      const btnStartText = document.getElementById('btnStartText');
+      const btnPause = document.getElementById('btnPause');
+      const btnStop = document.getElementById('btnStop');
+      if (st === 'running' || st === 'paused' || st === 'analyzing') {
+        btnStart.classList.add('hidden');
+        btnStop.classList.remove('hidden');
+        btnPause.classList.toggle('hidden', st === 'analyzing');
+        if (!btnStop.disabled) btnStop.textContent = st === 'analyzing' ? 'Skip screenshots' : 'Stop';
+        isPaused = (st === 'paused');
+        const pauseText = document.getElementById('pauseBtnText');
+        if (pauseText) pauseText.textContent = isPaused ? 'Resume' : 'Pause';
+        if (!pollInterval) pollInterval = setInterval(fetchStatus, 1000);
+      } else {
+        if (pollInterval) {
+          clearInterval(pollInterval);
+          pollInterval = null;
+        }
+        btnStart.classList.remove('hidden');
+        btnStart.disabled = false;
+        if (btnStartText) btnStartText.textContent = "Start Crawling";
+        btnPause.classList.add('hidden');
+        btnStop.classList.add('hidden');
+      }
+    }
+
+    function updateProgress(st, s, data) {
+      setBadge(st);
+      document.getElementById('statElapsed').textContent = (s.elapsed_seconds || 0) + 's';
+      document.getElementById('queueInfo').textContent = `Queue: ${s.queue_size || 0}`;
+      if (s.start_url) document.getElementById('statTargetDisplay').textContent = s.start_url;
+
+      let pct = 0;
+      if (st === 'completed') {
+        pct = 100;
+      } else if (st === 'analyzing') {
+        const ep = data.evidence_progress || {};
+        pct = ep.total ? Math.round(ep.done / ep.total * 100) : 100;
+      } else if (st === 'running' || st === 'paused') {
+        pct = (s.total_crawled <= 1 && s.total_discovered <= 2) ? 5
+          : Math.min(98, Math.max(5, Math.round((s.total_crawled / Math.max(1, s.total_discovered)) * 100)));
+      } else if (st === 'stopped') {
+        pct = s.total_discovered > 0 ? Math.min(100, Math.round((s.total_crawled / s.total_discovered) * 100)) : 0;
+      }
+      setProgress(pct);
+    }
+
+    function updateBanners(s) {
+      const limBanner = document.getElementById('limitationsBanner');
+      const limText = document.getElementById('limitationsText');
+      const notes = [];
+      if (s.auth_used) notes.push(`Auth: ${s.auth_status || 'Active'}`);
+      if (s.auth_required_count > 0) notes.push(`${s.auth_required_count} page(s) need login (401/403)`);
+      if (s.limitations && s.limitations.length > 0) notes.push(...s.limitations.slice(0, 3));
+      limText.textContent = notes.join(' | ');
+      limBanner.classList.toggle('hidden', notes.length === 0);
+
+      const midAlert = document.getElementById('midCrawlAuthAlert');
+      if (midAlert) midAlert.classList.toggle('hidden', !(s.auth_prompt_needed && !s.auth_used));
+    }
+
+    function updateReportBanner(st, data) {
+      const hasData = cachedInternal.length > 0 || cachedExternal.length > 0;
+      document.getElementById('btnTopDownload').classList.toggle('hidden', !hasData);
+      const tableDl = document.getElementById('btnTableDownload');
+      tableDl.classList.toggle('hidden', !hasData);
+      tableDl.classList.toggle('inline-flex', hasData);
+
+      const banner = document.getElementById('exportBanner');
+      const show = st === 'analyzing' || ((st === 'completed' || st === 'stopped') && data.report_ready);
+      banner.classList.toggle('hidden', !show);
+      if (!show) return;
+
+      const s = data.stats || {};
+      const issues = (s.status_4xx || 0) + (s.status_5xx || 0) + (s.status_err || 0);
+      const progressWrap = document.getElementById('reportProgressWrap');
+      document.querySelectorAll('#exportBanner [data-dl="pdf"]').forEach(a => a.classList.toggle('opacity-50', !reportReady));
+      if (st === 'analyzing') {
+        const ep = data.evidence_progress || {};
+        document.getElementById('reportTitle').textContent = 'Building reports…';
+        document.getElementById('reportSubtitle').textContent = ep.total && ep.done < ep.total
+          ? `Capturing screenshots of ${issues} issue${issues === 1 ? '' : 's'} · step ${ep.done} of ${ep.total}`
+          : 'Generating Excel and PDF…';
+        progressWrap.classList.remove('hidden');
+        document.getElementById('reportProgressBar').style.width = (ep.total ? Math.round(ep.done / ep.total * 100) : 15) + '%';
+      } else {
+        document.getElementById('reportTitle').textContent = issues ? `Reports ready · ${issues} issue${issues === 1 ? '' : 's'} found` : 'Reports ready · no issues found';
+        document.getElementById('reportSubtitle').textContent = screenshotNote || 'Excel by category · PDF with screenshots, causes and fixes';
+        progressWrap.classList.add('hidden');
+      }
+    }
+
+    async function fetchStatus() {
+      try {
+        const res = await fetch(apiUrl(`/api/crawl/status?since=${resultsCursor}&ext_since=${externalCursor}`));
+        if (!res.ok) return;
+        const data = await res.json();
+        const s = data.stats || {};
+        const st = s.status || 'idle';
+        const isActive = ['running', 'paused', 'analyzing'].includes(st);
+
+        if (isActive) sessionActive = true;
+        if (!sessionActive && !isActive) return;
+
+        // A different crawl replaced the one we were showing: start over from row 0
+        if ((s.start_url && currentTarget && s.start_url !== currentTarget) || (data.results_count || 0) < resultsCursor) {
+          currentTarget = s.start_url || '';
+          resetData();
+          return fetchStatus();
+        }
+        if (s.start_url) currentTarget = s.start_url;
+
+        let changed = false;
+        (data.new_results || []).forEach(r => {
+          if (!seenInternal.has(r.url)) { seenInternal.add(r.url); cachedInternal.push(r); changed = true; }
+        });
+        (data.new_external || []).forEach(e => {
+          const key = e.url + '|' + e.parent_url;
+          if (!seenExternal.has(key)) { seenExternal.add(key); cachedExternal.push(e); changed = true; }
+        });
+        if (typeof data.next_since === 'number') resultsCursor = data.next_since;
+        if (typeof data.next_ext_since === 'number') externalCursor = data.next_ext_since;
+        const more = resultsCursor < (data.results_count || 0) || externalCursor < (data.external_count || 0);
+
+        screenshotNote = data.screenshot_note || '';
+        reportReady = !!data.report_ready;
+        if (data.phase === 'done' && lastPhase !== 'done') {
+          await loadIssueDetails();
+          changed = true;
+        }
+        lastPhase = data.phase || lastPhase;
+
+        updateControls(st);
+        updateStats(s);
+        updateProgress(st, s, data);
+        updateBanners(s);
+        updateReportBanner(st, data);
+        if (changed) {
+          filterTable();
+          renderSummary(s);
+        }
+
+        if (data.logs && data.logs.length > 0) {
+          const logElem = document.getElementById('logOutput');
+          if (logElem) {
+            logElem.textContent = data.logs.join('\n');
+            logElem.scrollTop = logElem.scrollHeight;
+          }
+        }
+        if (more) setTimeout(fetchStatus, 50);
+      } catch (err) {
+        console.error("Fetch error:", err);
+      }
+    }
+
+    wireDownloadLinks();
+    switchTab('internal');
+  </script>
+</body>
+</html>
