@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 236 64" width="236" height="64" role="img" aria-label="ARACHNIX">
+  <title>ARACHNIX</title>
+  <!-- Full-colour logo: the mark + the "ARACHNIX" wordmark (system font stack, no web font needed).
+       "Slick" follows the reader's light / dark scheme; "UP" stays in the green accent. -->
+  <style>
+    .ink { fill: #1C211E; }
+    .up { fill: #2F6B3F; }
+    @media (prefers-color-scheme: dark) { .ink { fill: #E4E8E5; } .up { fill: #6FBF84; } }
+    text { font-family: 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif; font-size: 40px; letter-spacing: -0.5px; }
+  </style>
+  <defs>
+    <linearGradient id="su-tile" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#1E4A2B"/>
+      <stop offset="1" stop-color="#3C8F55"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#su-tile)"/>
+  <g fill="none" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M13 51H30a8 8 0 0 0 0-16h-3a8 8 0 0 1 0-16h2.5c6 0 10.5-3 15.5-8.5" stroke-width="7"/>
+    <path d="M37.5 9.2L49 8l-1 11.5" stroke-width="6.4"/>
+  </g>
+  <text x="78" y="46"><tspan class="ink" font-weight="700">Slick</tspan><tspan class="up" font-weight="800">UP</tspan></text>
+</svg>

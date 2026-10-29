@@ -1,0 +1,7 @@
+# Vercel project with Root Directory "frontend": upload only the static dashboard. This file takes
+# precedence over the repository root's .vercelignore (which is for a project deployed from the root).
+/*
+!index.html
+!config.js
+!vercel.json
+!static

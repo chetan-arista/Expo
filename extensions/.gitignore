@@ -1,0 +1,4 @@
+# Build output: python extensions/build.py writes it (the server builds its download zip in memory)
+dist/
+# The root .gitignore ignores *.md; keep this guide
+!README.md

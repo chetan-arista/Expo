@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 236 64" width="236" height="64" role="img" aria-label="ARACHNIX" style="color:#FFFFFF">
+  <title>ARACHNIX</title>
+  <!-- One-colour logo (dark backgrounds, print): everything in currentColor (white unless the page sets
+       another color); the S is cut out of the tile, so the background shows through it. -->
+  <style>
+    text { font-family: 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif; font-size: 40px; letter-spacing: -0.5px; }
+  </style>
+  <defs>
+    <mask id="su-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <rect width="64" height="64" rx="15" fill="#FFFFFF"/>
+      <g fill="none" stroke="#000000" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M13 51H30a8 8 0 0 0 0-16h-3a8 8 0 0 1 0-16h2.5c6 0 10.5-3 15.5-8.5" stroke-width="7"/>
+        <path d="M37.5 9.2L49 8l-1 11.5" stroke-width="6.4"/>
+      </g>
+    </mask>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="currentColor" mask="url(#su-cut)"/>
+  <text x="78" y="46" fill="currentColor"><tspan font-weight="700">Slick</tspan><tspan font-weight="800">UP</tspan></text>
+</svg>

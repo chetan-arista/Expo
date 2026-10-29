@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "ARACHNIX Companion",
+  "short_name": "ARACHNIX",
+  "version": "1.0.0",
+  "description": "Quick on-page SEO check of the current tab, and one-click hand-off to your team's ARACHNIX server.",
+  "minimum_chrome_version": "116",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "ARACHNIX Companion",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png"
+    }
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": ["activeTab", "storage", "scripting"],
+  "optional_permissions": ["cookies"],
+  "optional_host_permissions": ["https://*/*", "http://*/*"],
+  "content_security_policy": {
+    "extension_pages": "default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; img-src 'self' data:; style-src 'self'; connect-src 'self' https: http:"
+  }
+}

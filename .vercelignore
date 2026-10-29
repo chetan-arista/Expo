@@ -1,0 +1,7 @@
+# Vercel serves only the static dashboard. The Python backend runs on Render (crawls take minutes, far
+# longer than a serverless function may run), so nothing else is uploaded: no api/ function, no
+# requirements.txt, no crawler code. Allow-list: ignore everything at the root, then allow these files.
+/*
+!index.html
+!config.js
+!vercel.json

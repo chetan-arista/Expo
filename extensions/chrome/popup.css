@@ -1,0 +1,50 @@
+/* The popup: 380 px wide (Chrome caps popups at 800 x 600; longer content scrolls). */
+body.popup { width: 380px; min-height: 200px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.top { display: flex; align-items: center; justify-content: space-between; padding: 2px 2px 0; }
+
+.site { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.page { padding: 4px 12px 8px; }
+.pagehead { display: flex; flex-direction: column; min-width: 0; }
+.host { font-weight: 800; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.path { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.summary { display: flex; gap: 6px; flex-wrap: wrap; }
+.summary:empty { display: none; }
+
+.checks { display: flex; flex-direction: column; }
+.row { padding: 8px 0; border-top: 1px solid var(--line-2); display: flex; flex-direction: column; gap: 3px; }
+.row:first-child { border-top: 0; }
+.rowhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.label { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.value { font-size: 12.5px; color: var(--ink); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.value.url { font-family: var(--mono); font-size: 11.5px; }
+.value.empty { color: var(--muted); font-style: italic; }
+.extra { font-size: 11.5px; color: var(--ink-2); overflow-wrap: anywhere; }
+.facts { display: flex; gap: 10px; font-size: 11.5px; color: var(--muted); }
+.facts b { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+.facts .range { margin-left: auto; }
+.notes { margin: 0; padding-left: 15px; font-size: 11.5px; color: var(--ink-2); }
+.types { display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* pixel width bar: the shaded band is the range ARACHNIX calls good, the fill is this text's width */
+.bar { position: relative; height: 6px; border-radius: 999px; background: var(--btn2-bg); margin: 3px 0 1px; overflow: hidden; }
+.bar .zone { position: absolute; top: 0; bottom: 0; background: var(--zone); }
+.bar .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; background: var(--f2); }
+.bar .fill.warn { background: var(--f3); }
+.bar .tick { position: absolute; top: -1px; bottom: -1px; width: 1.5px; background: var(--muted); opacity: .55; }
+
+.note { font-size: 11px; margin: 6px 0 0; line-height: 1.4; }
+
+.actrow { display: flex; flex-direction: column; gap: 6px; }
+.actrow .btn { width: 100%; padding: 8px 12px; font-size: 13px; }
+.serverline { font-size: 11px; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.sessionout { display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+.names { display: flex; flex-wrap: wrap; gap: 4px; }
+.names .chip { font-family: var(--mono); font-weight: 600; font-size: 10.5px; }
+.sessionout .btnrow { display: flex; gap: 6px; }
+.sessionout .btnrow .btn { flex: 1 1 auto; }
+.small { font-size: 11.5px; }
+.spin { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent-ink); animation: spin 1s linear infinite; vertical-align: -2px; margin-right: 6px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }

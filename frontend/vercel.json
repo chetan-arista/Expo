@@ -1,3 +1,11 @@
 {
-  "cleanUrls": true
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "cleanUrls": true,
+  "headers": [
+    {
+      "source": "/config.js",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+    }
+  ]
 }
