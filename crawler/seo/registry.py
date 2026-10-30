@@ -95,7 +95,8 @@ _TABS: Dict[str, Tab] = {}
 # hidden everywhere (tab bar, All-tabs menu, Overview, Issues, checks, exports, PDFs, API Access).
 # ONE switch turns them back on for 2.0: set V2_FEATURES = True here, or start the server with
 # ARACHNIX_V2_FEATURES=1. The page reads the same lists from /api/integrations ("hidden_sources").
-V2_FEATURES = os.environ.get("ARACHNIX_V2_FEATURES", "").strip().lower() in ("1", "true", "yes", "on")
+# 2.0 (29 Oct 2026): on by default now that every piece has its screen; ARACHNIX_V2_FEATURES=0 hides them again
+V2_FEATURES = os.environ.get("ARACHNIX_V2_FEATURES", "1").strip().lower() not in ("0", "false", "no", "off")
 V2_ONLY: Dict[str, Any] = {
     "tabs": ("ai", "link_metrics", "log_files"),                        # AI, Link Metrics, Log Files (P22)
     "filters": {"content": ("grammar_errors", "spelling_errors")},      # LanguageTool; spelling dictionary UI

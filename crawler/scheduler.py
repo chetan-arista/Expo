@@ -17,6 +17,10 @@ HISTORY_MAX kept). A task:
   notify         {"emails": [...], "attach": bool, "on_failure": bool}
   auto_compare   compare with the previous crawl of the site (in the email and the history)
   wait_minutes   how long a due task waits while another crawl runs before that run is skipped (0-1440)
+  apis           {"sources": [gsc | ga4 | psi | link_metrics | grammar], "wait_minutes": 0-120}: data fetched after
+                 the crawl and waited for (at most wait_minutes) before the exports and the email (W8)
+  start.source   List mode: "urls" (the list in the task), "sitemap" or "sheet" (start.source_url, read again at
+                 every run: an XML sitemap or a Google Sheet's URL column) (W8)
   next_run, last_run, last_status   kept by the scheduler
 "valid" / "problems" say whether the task can run now (profile exists, login variable set...).
 
@@ -78,8 +82,9 @@ _EXPORT_ID = re.compile(r"^[A-Za-z0-9_.:/-]{1,120}$")
 
 DEFAULT_TASK: Dict[str, Any] = {
     "name": "", "project": "", "enabled": True, "first_run": "", "interval": "once", "every": 1,
-    "start": {"mode": "spider", "url": "", "urls": [], "profile": "", "options": {},
+    "start": {"mode": "spider", "url": "", "urls": [], "profile": "", "options": {}, "source": "urls", "source_url": "",
               "login": {"type": "none", "env": "", "header_name": ""}},
+    "apis": {"sources": [], "wait_minutes": 10},
     "exports": {"items": [], "format": "xlsx", "skip_empty": True, "excel": True, "pdf": False, "save_crawl": True,
                 "sitemap": False},
     "notify": {"emails": [], "attach": False, "on_failure": True},
@@ -196,6 +201,50 @@ def _valid_url(url: str) -> bool:
                          url, re.I)) and len(url) <= 2000
 
 
+LIST_SOURCES = ("urls", "sitemap", "sheet")
+API_SOURCES = ("gsc", "ga4", "psi", "link_metrics", "grammar")
+
+
+def _check_apis(t: Dict[str, Any], e: Dict[str, str]) -> None:
+    a = t.get("apis") if isinstance(t.get("apis"), dict) else {}
+    src = [s for s in (a.get("sources") or []) if isinstance(s, str)]
+    bad = [s for s in src if s not in API_SOURCES]
+    if bad:
+        e["apis.sources"] = "Choose from Search Console, GA4, PageSpeed, link metrics and grammar."
+    try:
+        wait = int(a.get("wait_minutes") if a.get("wait_minutes") is not None else 10)
+    except (TypeError, ValueError):
+        wait = -1
+    if not 0 <= wait <= 120:
+        e["apis.wait_minutes"] = "Wait 0 to 120 minutes for the API data."
+        wait = 10
+    t["apis"] = {"sources": [s for s in dict.fromkeys(src) if s in API_SOURCES], "wait_minutes": wait}
+
+
+def list_from_source(st: Dict[str, Any], user_agent: str = "ARACHNIX") -> Tuple[List[str], str]:
+    """(URLs, problem) of a List-mode task whose list comes from a sitemap or a Google Sheet, read now."""
+    url = str(st.get("source_url") or "")
+    try:
+        if st.get("source") == "sitemap":
+            from urllib.parse import urlsplit
+            from .sitemap_parser import SitemapParser
+            host = urlsplit(url).hostname or ""
+            p = SitemapParser(base_url=url, base_domain=host, user_agent=user_agent, max_sitemaps=50,
+                              max_urls=MAX_LIST_URLS, include_subdomains=True, extra_sitemaps=[url],
+                              robots_text="User-agent: *\n")
+            urls = [u for u, _src in p.parse_all()]
+            return urls[:MAX_LIST_URLS], "" if urls else "The sitemap gave no URL."
+        if st.get("source") == "sheet":
+            from .integrations.sheets import read_list
+            got = read_list(url, cap=MAX_LIST_URLS)
+            lines = got.get("lines") or got.get("urls") or []
+            urls = [u for u in (_normalize_url(x) for x in lines) if _valid_url(u)]
+            return urls[:MAX_LIST_URLS], "" if urls else "The Google Sheet gave no URL."
+    except Exception as ex:
+        return [], f"The list could not be read ({str(getattr(ex, 'message', '') or ex)[:160]})."
+    return [], ""
+
+
 def validate_task(task: Any, profile_exists: Optional[Callable[[str], bool]] = None
                   ) -> Tuple[Dict[str, Any], Dict[str, str], List[str]]:
     """(clean task, {field: error}, problems). Errors stop a task from being saved; problems (a profile that
@@ -213,6 +262,7 @@ def validate_task(task: Any, profile_exists: Optional[Callable[[str], bool]] = N
     if when is None:
         e["first_run"] = "Enter the date and time of the first run."
     t["first_run"] = when.isoformat(timespec="seconds") if when else ""
+    _check_apis(t, e)
     interval = str(t.get("interval") or "once").lower()
     if interval not in INTERVALS:
         e["interval"] = "Choose Once, Hourly, Daily, Weekly or Monthly."
@@ -242,6 +292,18 @@ def validate_task(task: Any, profile_exists: Optional[Callable[[str], bool]] = N
             e["start.url"] = URL_PASSWORD_RULE
         st["urls"] = []
     else:
+        st["source"] = str(st.get("source") or "urls").lower()
+        if st["source"] not in LIST_SOURCES:
+            e["start.source"] = "The list comes from the URLs below, an XML sitemap or a Google Sheet."
+            st["source"] = "urls"
+        if st["source"] != "urls":
+            su = _normalize_url(st.get("source_url") or "")
+            if not _valid_url(su):
+                e["start.source_url"] = ("Enter the sitemap address (https://.../sitemap.xml)." if st["source"] == "sitemap"
+                                         else "Paste the Google Sheet's link.")
+            st["source_url"] = su
+            if not st.get("urls"):
+                st["urls"] = [su] if _valid_url(su) else []     # replaced by the source's URLs at every run
         raw = st.get("urls")
         lines = raw.splitlines() if isinstance(raw, str) else [str(u) for u in raw or []]
         urls = list(dict.fromkeys(_normalize_url(u) for u in lines if str(u).strip()))
@@ -530,6 +592,12 @@ class Scheduler:
         req["mode"] = st.get("mode") or "spider"
         if req["mode"] == "list":
             req["urls"] = list(st.get("urls") or [])
+            if st.get("source") in ("sitemap", "sheet"):
+                urls, problem = list_from_source(st)
+                if urls:
+                    req["urls"] = urls
+                elif problem:
+                    self.log(f"[Scheduler] '{task.get('name')}': {problem} The URLs saved with the task are used.")
             req["url"] = req["urls"][0] if req["urls"] else ""
         else:
             req["url"] = st.get("url") or ""

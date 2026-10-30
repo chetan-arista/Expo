@@ -6409,8 +6409,57 @@ def _schedule_complete(task: dict, run: dict) -> dict:
         _apply_retention()   # old scheduled-run folders go even when the task does not save its crawl
     return out
 
+def _schedule_apis(task: dict, job: CrawlJob, out: Dict[str, Any]) -> None:
+    """W8: the task's API data (Search Console, GA4, PageSpeed, link metrics, grammar) fetched after its crawl and
+    waited for, at most apis.wait_minutes, so the exports and the email include it."""
+    a = task.get("apis") or {}
+    sources = [s for s in a.get("sources") or [] if s in ("gsc", "ga4", "psi", "link_metrics", "grammar")]
+    if not sources or job.crawler is None:
+        return
+    I = _integrations()
+    started, failed = [], []
+    for s in sources:
+        try:
+            if s in ("gsc", "ga4", "psi"):
+                if not (I.jobs(job.crawler).get(s) or {}).get("running"):
+                    I.start_fetch(s, job.crawler)
+            elif s == "link_metrics":
+                from crawler.integrations import linkmetrics
+                linkmetrics.start_fetch(job.crawler)
+            elif s == "grammar":
+                from crawler.connectors import languagetool
+                languagetool.start_check(job.crawler)
+            started.append(s)
+        except Exception as e:
+            failed.append(f"{s}: {job.mask(str(getattr(e, 'message', '') or e))[:120]}")
+
+    def running() -> bool:
+        busy = any((I.jobs(job.crawler).get(s) or {}).get("running") for s in started if s in ("gsc", "ga4", "psi"))
+        try:
+            if "link_metrics" in started:
+                from crawler.integrations import linkmetrics
+                busy = busy or (linkmetrics.fetch_status(job.crawler) or {}).get("state") == "running"
+            if "grammar" in started:
+                from crawler.connectors import languagetool
+                busy = busy or (languagetool.job_status(job.crawler) or {}).get("state") == "running"
+        except Exception:
+            pass
+        return busy
+    until = time.time() + 60 * int(a.get("wait_minutes") if a.get("wait_minutes") is not None else 10)
+    while running() and time.time() < until and not job.cancel_event.is_set():
+        time.sleep(3)
+    if started:
+        out["notes"].append("API data fetched before the exports: " + ", ".join(started)
+                            + (" (still running when the wait ended)" if running() else "") + ".")
+    if failed:
+        out["notes"].append("API data not fetched: " + "; ".join(failed))
+    _site_index(job, force=True)
+
+
 def _schedule_steps(task: dict, run: dict, job: CrawlJob, out: Dict[str, Any]) -> None:
     """The after-crawl steps of _schedule_complete; fills `out`."""
+    if run.get("status") in ("completed", "stopped"):
+        _schedule_apis(task, job, out)
     ex = task.get("exports") or {}
     notify_cfg = task.get("notify") or {}
     emails = list(notify_cfg.get("emails") or [])

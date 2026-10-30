@@ -9647,7 +9647,8 @@ ${fallback}`;
       return {name: '', project: '', enabled: true, first_run: isoLocal(d), interval: 'daily', every: 1, wait_minutes: 60,
               start: {mode: 'spider', url: state.target || $('urlInput').value.trim(), urls: [], profile: '', options: {}, login: {type: 'none', env: '', header_name: ''}},
               exports: {items: [], format: 'xlsx', skip_empty: true, excel: true, pdf: false, save_crawl: true, sitemap: false},
-              notify: {emails: [], attach: false, on_failure: true}, auto_compare: true, _useCurrent: true};
+              notify: {emails: [], attach: false, on_failure: true}, auto_compare: true, _useCurrent: true,
+              apis: {sources: [], wait_minutes: 10}};
     }
     function schedHtml() {
       if (sch.view === 'edit') return schedEditHtml();
@@ -9747,6 +9748,8 @@ ${fallback}`;
       } else if (sch.tab === 'start') {
         const list = (t.start || {}).mode === 'list';
         body += `<div class="field"><label>Mode</label><div class="seg" style="max-width:280px"><button class="${!list ? 'on' : ''}" onclick="tset('start.mode','spider'); dlgRender()">Spider</button><button class="${list ? 'on' : ''}" onclick="tset('start.mode','list'); dlgRender()">List</button></div></div>` +
+          (list ? `<div class="row2"><div class="field"><label>The list comes from</label><select onchange="tset('start.source', this.value); dlgRender()">${opt('urls', 'The URLs below', tget('start.source') || 'urls')}${opt('sitemap', 'An XML sitemap (read again at every run)', tget('start.source') || 'urls')}${opt('sheet', 'A Google Sheet (read again at every run)', tget('start.source') || 'urls')}</select></div>` +
+                 ((tget('start.source') || 'urls') !== 'urls' ? tin('start.source_url', tget('start.source') === 'sitemap' ? 'Sitemap address' : 'Google Sheet link', 'url', 'spellcheck="false"') : '') + '</div>' : '') +
           (list ? `<div class="field"><label for="t_urls">URLs to crawl (one per line)</label><textarea id="t_urls" oninput="tset('start.urls', lines(this.value))">${esc(((t.start || {}).urls || []).join('\n'))}</textarea>${ferr(sch.errors['start.urls'])}</div>`
                 : tin('start.url', 'Start URL', 'url', 'placeholder="https://example.com/" spellcheck="false"')) +
           `<div class="field"><label for="t_prof">Crawl configuration</label><select id="t_prof" onchange="tset('start.profile', this.value); tset('_useCurrent', this.value === '' ); dlgRender()">` +
@@ -9763,6 +9766,9 @@ ${fallback}`;
         const bulk = C.bulk.filter(b => b.kind === 'bulk').map(b2 => `<label><input type="checkbox" ${items.has(b2.id) ? 'checked' : ''} onchange="schItem('${esc(b2.id)}', this.checked)">${esc(b2.menu_path.join(' › '))}</label>`).join('');
         body += tcb('exports.save_crawl', 'Save the crawl (File > Crawls)') + tcb('exports.excel', 'Excel workbook (all tabs)') + tcb('exports.pdf', 'PDF audit report') + tcb('exports.sitemap', 'XML Sitemap') +
           `<div class="row2"><div class="field"><label>Format of the reports below</label><select onchange="tset('exports.format', this.value)">${opt('xlsx', 'Excel Workbook (*.xlsx)', tget('exports.format'))}${opt('csv', 'Comma Separated Values (*.csv)', tget('exports.format'))}</select></div><div style="padding-top:22px">${tcb('exports.skip_empty', 'Skip Empty Reports')}</div></div>` +
+          `<h5>API data before the exports</h5><div class="hint" style="margin-top:0">Fetched after the crawl and waited for, so the exports and the email include it (each source must be connected).</div>` +
+          `<div class="cbtree"><div class="items">${[['gsc', 'Search Console'], ['ga4', 'Google Analytics 4'], ['psi', 'PageSpeed Insights'], ['link_metrics', 'Link metrics'], ['grammar', 'Grammar (LanguageTool)']].map(([k, l]) => `<label><input type="checkbox" ${(tget('apis.sources') || []).includes(k) ? 'checked' : ''} onchange="schApi('${k}', this.checked)">${l}</label>`).join('')}</div></div>` +
+          tin('apis.wait_minutes', 'Wait for the API data at most (minutes)', 'number', 'min="0" max="120"') +
           `<h5>Reports</h5><div class="cbtree"><div class="items">${rep || '<span class="muted">The report list appears once the server answers.</span>'}</div></div>` +
           `<h5>Bulk exports</h5><div class="cbtree"><div class="items">${bulk}</div></div>`;
       } else {
@@ -11697,7 +11703,8 @@ ${fallback}`;
       else if (was === 'running') {
         if (anal.state === 'error') toast(esc(anal.message || 'The analysis failed.'), 'bad', 9000);
         else toast(anal.state === 'stopped' ? 'Crawl Analysis stopped: the counts are those of the last finished step.' : 'Crawl Analysis finished: the tabs are up to date.', 'info', 6000);
-        struct.data = null; times.data = null; segp.data = null; intel.errors = null;
+        times.data = null; segp.data = null; intel.errors = null;
+        if (struct.data) loadStructure();   // refresh in place: the panel keeps showing the current structure meanwhile
         fetchTabs(true);
       }
       renderStatusBar();
@@ -12566,6 +12573,9 @@ ${fallback}`;
       if (lines(o.soft404).length) p.soft_404_phrases = lines(o.soft404);
       if (lines(o.anchors).length) p.non_descriptive_anchors = lines(o.anchors);
       if (lines(o.sitemaps).length) p.sitemap_urls = lines(o.sitemaps);
+      if (Number(o.near_dup) >= 50 && Number(o.near_dup) <= 100) p.near_dup_threshold = Number(o.near_dup);
+      if (lines(o.cdn).length) p.cdn_hosts = lines(o.cdn);
+      if (lines(o.content_inc).length || lines(o.content_exc).length) p.content_area = {include: lines(o.content_inc), exclude: lines(o.content_exc)};
       if (String(o.robots || '').trim()) p.custom_robots_txt = o.robots;
       return p;
     }
@@ -12588,6 +12598,10 @@ ${fallback}`;
         box('a11y_audit', 'Accessibility audit (axe-core in Chrome on each page)', false) + num('a11y_pages', 'Accessibility audit: pages at most', 500) +
         area('soft404', 'Extra soft 404 phrases (one per line, any language)', 'seite nicht gefunden') + area('anchors', 'Extra generic anchor texts (one per line)', 'mehr lesen') +
         area('sitemaps', 'Extra XML sitemap addresses (one per line)', 'https://example.com/sitemap-products.xml') +
+        num('near_dup', 'Near-duplicate similarity in % (50-100)', 90) +
+        area('cdn', "CDN hosts whose images and files count as the site's own (one per line)", 'cdn.shopify.com') +
+        area('content_inc', 'Content area: only these elements (CSS selectors, one per line)', 'main') +
+        area('content_exc', 'Content area: leave these elements out (CSS selectors, one per line)', '.cookie-banner') +
         area('robots', 'Custom robots.txt for this crawl (instead of the live file)', 'User-agent: *\nDisallow: /cart') +
         `<div class="field" style="display:flex;gap:6px"><input id="v2rtUrl" placeholder="URL to test against this robots.txt" style="flex:1"><button class="btn btn-line" onclick="V2robotsTest()">Test</button></div><div id="v2rtOut"></div>`;
       return dlgShell({title: 'Preferences & Spider options', body, pagekey: 'opts',
@@ -12783,6 +12797,198 @@ ${fallback}`;
       const k = state.dtab.slice(3);
       $('dbody').innerHTML = sectionHtml(k, (det.data.sections || {})[k]);
     };
+  })();
+  </script>
+  <script>
+  /* ARACHNIX 2.0: AI prompts (U4, the AI tab's prompt manager) and Log Files upload (U14 / P22). Configuration menu
+     entries; every server string through esc(). */
+  (function () {
+    const q = v => esc(v == null ? '' : v);
+    const S = {ai: {data: null, err: '', run: null, timer: null, msg: ''}, logs: {st: null, timer: null, msg: ''}};
+    const cfg = MB.config;
+    MB.config = () => {
+      const items = cfg();
+      const at = items.findIndex(i => i && i.label === 'Preferences & Spider options');
+      items.splice(at >= 0 ? at + 1 : items.length, 0, {label: 'AI prompts', act: () => openAiPrompts()},
+                   {label: 'Log files (server logs)', act: () => openLogs()});
+      return items;
+    };
+    window.openAiPrompts = openAiPrompts; window.openLogs = openLogs;
+
+    // ---- AI prompts ----------------------------------------------------------------------------
+    async function openAiPrompts() { dlgOpen('v2ai', 'wide', aiHtml); await aiLoad(); }
+    async function aiLoad() {
+      try { S.ai.data = await getJSON('/api/ai/prompts'); S.ai.err = ''; } catch (e) { S.ai.err = e.message; }
+      dlgRender();
+    }
+    function aiHtml() {
+      const D = S.ai.data;
+      if (S.ai.err) return dlgShell({title: 'AI prompts', body: `<div class="info bad">${q(S.ai.err)}</div>`});
+      if (!D) return dlgShell({title: 'AI prompts', body: '<div class="hint">Loading…</div>'});
+      const L = D.limits || {}, src = L.sources || [];
+      const rows = (D.prompts || []).map((p, i) => `<div class="info" style="margin:8px 0">` +
+        `<div style="display:flex;gap:8px;align-items:center"><input value="${q(p.name)}" style="flex:1" onchange="V2ai(${i},'name',this.value)">` +
+        `<select onchange="V2ai(${i},'source',this.value)">${src.map(s => opt(s.id, s.label, p.source)).join('')}</select>` +
+        `<input type="number" min="1" max="${q(L.max_pages || 500)}" value="${q(p.max_pages || L.default_pages || 25)}" style="width:80px" title="Pages at most" onchange="V2ai(${i},'max_pages',Number(this.value))">` +
+        `<button class="btn btn-line" onclick="V2aiDel(${i})">Remove</button></div>` +
+        `<textarea style="width:100%;margin-top:6px" onchange="V2ai(${i},'instruction',this.value)">${q(p.instruction)}</textarea></div>`).join('') ||
+        '<div class="hint">No prompt yet: add one from the list below.</div>';
+      const run = S.ai.run;
+      const runInfo = run ? `<div class="info ${run.state === 'error' ? 'bad' : ''}"><b>${q(run.state)}</b> ${q(run.done || 0)} of ${q(run.total || 0)} pages` +
+        `${run.calls_left != null ? ` · ${q(run.calls_left)} AI calls left` : ''}${run.message ? ' · ' + q(run.message) : ''}</div>` : '';
+      const body = '<p>Your own AI questions for each page (summaries, intent, missing facts, alt text...). Answers fill the <b>AI</b> tab. ' +
+        'A signed-in crawl is never sent to a free cloud AI.</p>' + (S.ai.msg ? `<div class="info">${q(S.ai.msg)}</div>` : '') + rows +
+        `<div style="display:flex;gap:8px;margin:8px 0"><select id="v2aiPreset" style="flex:1">${(D.presets || []).map(p => opt(p.preset, p.name + ' - ' + p.description, '')).join('')}</select>` +
+        `<button class="btn btn-line" onclick="V2aiAdd()">Add</button></div>` + runInfo;
+      const running = run && run.state === 'running';
+      return dlgShell({title: 'AI prompts', body, pagekey: 'ai', foot:
+        `<button class="btn btn-line" onclick="V2aiSave()">Save prompts</button>` +
+        (running ? '<button class="btn btn-stop" onclick="V2aiStop()">Stop</button>' : `<button class="btn btn-xls" onclick="V2aiRun()" ${(D.prompts || []).length ? '' : 'disabled'}>Run on this crawl</button>`) +
+        '<span style="flex:1"></span><button class="btn btn-line" onclick="dlgClose()">Close</button>'});
+    }
+    window.V2ai = (i, k, v) => { S.ai.data.prompts[i][k] = v; };
+    window.V2aiDel = i => { S.ai.data.prompts.splice(i, 1); dlgRender(); };
+    window.V2aiAdd = () => {
+      const id = document.getElementById('v2aiPreset').value, p = (S.ai.data.presets || []).find(x => x.preset === id);
+      if (p) { S.ai.data.prompts.push(Object.assign({}, p, {slot: S.ai.data.prompts.length + 1})); dlgRender(); }
+    };
+    window.V2aiSave = async () => {
+      try { S.ai.data = await sendJSON('/api/ai/prompts', {prompts: S.ai.data.prompts}, 'PUT'); S.ai.msg = 'Saved.'; }
+      catch (e) { S.ai.msg = e.message; }
+      dlgRender();
+    };
+    window.V2aiRun = async () => {
+      await V2aiSave();
+      try { const r = await sendJSON('/api/ai/run', {}); S.ai.run = r; S.ai.job = r.job_id || r.id; aiPoll(); }
+      catch (e) { S.ai.msg = e.message; dlgRender(); }
+    };
+    async function aiPoll() {
+      clearTimeout(S.ai.timer);
+      if (!S.ai.job) return;
+      try { S.ai.run = await getJSON(`/api/ai/run/${encodeURIComponent(S.ai.job)}`); } catch (e) { /* keep the last state */ }
+      if (dlgOn('v2ai')) dlgRender();
+      if (S.ai.run && S.ai.run.state === 'running') S.ai.timer = setTimeout(aiPoll, 1500);
+      else { try { fetchTabs(true); } catch (e) { /* 1.0 refresh */ } }
+    }
+    window.V2aiStop = async () => { try { await sendJSON(`/api/ai/run/${encodeURIComponent(S.ai.job)}/stop`, {}); } catch (e) { /* stopping */ } aiPoll(); };
+
+    // ---- Log files -----------------------------------------------------------------------------
+    async function openLogs() { dlgOpen('v2logs', '', logsHtml); await logsPoll(); }
+    function logsHtml() {
+      const st = S.logs.st || {};
+      const state = st.state === 'running' ? `<div class="info"><b>Reading the log…</b> ${num(st.lines || 0)} lines so far.</div>`
+        : st.state === 'done' ? `<div class="info"><b>Done:</b> ${num(st.lines || 0)} lines, ${num(st.parsed || 0)} requests understood, ${num(st.bot_hits || 0)} bot requests. The <b>Log Files</b> tab and the Reports &gt; Log Files reports show them.</div>`
+        : st.state === 'error' ? `<div class="info bad">${q(st.reason || 'The log could not be read.')}</div>` : '';
+      const body = '<p>Upload the web server\'s access log (Apache / Nginx Combined or Common, IIS / W3C, or a .gz of one; at most 200 MB) to see which pages Googlebot, Bingbot and AI bots really request. ' +
+        'ARACHNIX keeps counts only: no log line and no IP address is stored, and the file is deleted once read.</p>' +
+        '<div style="display:flex;gap:8px;align-items:center"><input type="file" id="v2logFile" accept=".log,.txt,.gz,.access,*/*" style="flex:1"><label class="opt" style="padding:0"><input type="checkbox" id="v2logVerify" checked><span>verify bots (reverse DNS)</span></label></div>' +
+        (S.logs.msg ? `<div class="info bad">${q(S.logs.msg)}</div>` : '') + state;
+      return dlgShell({title: 'Log files', body, pagekey: 'logs', foot:
+        `<button class="btn btn-xls" onclick="V2logUp()" ${st.state === 'running' ? 'disabled' : ''}>Upload and read</button>` +
+        `<button class="btn btn-line" onclick="V2logDel()" ${st.state === 'done' ? '' : 'disabled'}>Remove the log data</button>` +
+        '<span style="flex:1"></span><button class="btn btn-line" onclick="dlgClose()">Close</button>'});
+    }
+    async function logsPoll() {
+      clearTimeout(S.logs.timer);
+      try { S.logs.st = await getJSON('/api/logs/status'); } catch (e) { S.logs.st = null; }
+      if (dlgOn('v2logs')) dlgRender();
+      if (S.logs.st && S.logs.st.state === 'running') S.logs.timer = setTimeout(logsPoll, 1500);
+      else if (S.logs.st && S.logs.st.state === 'done') { try { fetchTabs(true); } catch (e) { /* 1.0 refresh */ } }
+    }
+    window.V2logUp = async () => {
+      const f = (document.getElementById('v2logFile').files || [])[0];
+      if (!f) { S.logs.msg = 'Choose a log file first.'; dlgRender(); return; }
+      if (f.size > 200 * 1024 * 1024) { S.logs.msg = 'The file is larger than 200 MB: upload one day or week at a time, or a .gz.'; dlgRender(); return; }
+      S.logs.msg = '';
+      const verify = document.getElementById('v2logVerify').checked ? 'true' : 'false';
+      try {
+        const res = await api(`/api/logs/upload?verify=${verify}`, {method: 'POST', headers: {'Content-Type': 'application/octet-stream'}, body: f});
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(errText(data, res.status));
+      } catch (e) { S.logs.msg = e.message; }
+      logsPoll();
+    };
+    window.V2logDel = async () => { try { await api('/api/logs', {method: 'DELETE'}); fetchTabs(true); } catch (e) { /* listed below */ } logsPoll(); };
+  })();
+  </script>
+  <script>
+  /* ARACHNIX 2.0: SEO tools (U13 n-grams / semantic search / clusters, U14 segment tester, profile compare, Google
+     Sheets export, snippet library) in one dialog (Configuration > SEO tools), and the scheduler's API step helper.
+     Every server string through esc(); links are built here and only http(s). */
+  (function () {
+    const q = v => esc(v == null ? '' : v);
+    const T = {tab: 'search', out: {}, busy: ''};
+    const TABS = [['search', 'Semantic search'], ['ngrams', 'N-grams'], ['clusters', 'Topic clusters'], ['segment', 'Segment tester'],
+                  ['profiles', 'Compare profiles'], ['sheets', 'Google Sheets'], ['snippets', 'JavaScript snippets']];
+    const cfg = MB.config;
+    MB.config = () => {
+      const items = cfg();
+      const at = items.findIndex(i => i && i.label === 'Log files (server logs)');
+      items.splice(at >= 0 ? at + 1 : items.length, 0, {label: 'SEO tools (search, n-grams, testers)', act: () => openTools()});
+      return items;
+    };
+    window.openTools = openTools;
+    window.schApi = (k, on) => { const cur = new Set(tget('apis.sources') || []); on ? cur.add(k) : cur.delete(k); tset('apis.sources', [...cur]); };
+    const link = u => /^https?:\/\//i.test(String(u || '')) ? `<a href="${q(u)}" target="_blank" rel="noopener noreferrer">${q(u)}</a>` : q(u);
+
+    function openTools(tab) { if (tab) T.tab = tab; dlgOpen('v2tools', 'wide', toolsHtml); if (T.tab === 'snippets' || T.tab === 'clusters') run(); }
+    function toolsHtml() {
+      const nav = TABS.map(([k, l]) => `<button class="${T.tab === k ? 'on' : ''}" onclick="V2tool('${k}')">${l}</button>`).join('');
+      const o = T.out[T.tab];
+      const result = T.busy ? '<div class="hint">Working…</div>' : !o ? '' : o.err ? `<div class="info bad">${q(o.err)}</div>` : o.html;
+      let form = '';
+      const sel = state.selUrl || '';
+      if (T.tab === 'search') form = '<p>Pages closest to a topic: by meaning when an embeddings run exists for the crawl, else by words.</p><div style="display:flex;gap:8px"><input id="v2q" placeholder="e.g. offshore development team" style="flex:1"><button class="btn btn-xls" onclick="V2run()">Search</button></div>';
+      else if (T.tab === 'ngrams') form = `<p>The most frequent 1 to 4-word phrases of one page (its main content).</p><div style="display:flex;gap:8px"><input id="v2u" value="${q(sel)}" placeholder="A crawled page (select a row first)" style="flex:1"><select id="v2n">${opt(1, '1 word', 2)}${opt(2, '2 words', 2)}${opt(3, '3 words', 2)}${opt(4, '4 words', 2)}</select><button class="btn btn-xls" onclick="V2run()">Count</button></div>`;
+      else if (T.tab === 'clusters') form = '<p>Pages grouped by topic (by meaning after an embeddings run, else by words).</p><button class="btn btn-line" onclick="V2run()">Refresh</button>';
+      else if (T.tab === 'segment') form = `<p>Which segment a URL of the crawl falls into, with the segments saved for the site.</p><div style="display:flex;gap:8px"><input id="v2u" value="${q(sel)}" placeholder="A crawled URL" style="flex:1"><button class="btn btn-xls" onclick="V2run()">Test</button></div>`;
+      else if (T.tab === 'profiles') form = '<p>The crawl options that differ between two saved profiles.</p><div style="display:flex;gap:8px"><input id="v2pa" placeholder="Profile A" style="flex:1"><input id="v2pb" placeholder="Profile B" style="flex:1"><button class="btn btn-xls" onclick="V2run()">Compare</button></div>';
+      else if (T.tab === 'sheets') form = `<p>Send the tab on screen (<b>${q(state.tab)}</b>, filter <b>${q(state.filter)}</b>) to a new Google Sheet. Connect Google Sheets under Configuration › Connections first.</p><button class="btn btn-xls" onclick="V2run()">Export to Google Sheets</button>`;
+      else if (T.tab === 'snippets') form = '<p>Ready Custom JavaScript snippets: copy one into Configuration › Custom JavaScript.</p>';
+      return dlgShell({title: 'SEO tools', nav: '<div class="grp">Tools</div>' + nav, body: form + '<div style="margin-top:10px">' + result + '</div>',
+                       pagekey: 'tools-' + T.tab, foot: '<span style="flex:1"></span><button class="btn btn-line" onclick="dlgClose()">Close</button>'});
+    }
+    window.V2tool = k => { T.tab = k; dlgRender(); if (k === 'snippets' || k === 'clusters') run(); };
+    window.V2run = () => run();
+    const val = id => ((document.getElementById(id) || {}).value || '').trim();
+    async function run() {
+      const k = T.tab;
+      T.busy = 'x'; dlgRender();
+      try {
+        let html = '';
+        if (k === 'search') {
+          const r = await getJSON('/api/crawl/semantic-search?q=' + encodeURIComponent(val('v2q')));
+          html = (r.note ? `<div class="hint">${q(r.note)}</div>` : '') + `<table class="lt"><thead><tr><th>Page</th><th>Title</th><th>Score</th></tr></thead><tbody>` +
+            (r.results || []).map(x => `<tr><td>${link(x.url)}</td><td>${q(x.title)}</td><td>${q(Number(x.score || 0).toFixed(3))}</td></tr>`).join('') + '</tbody></table>';
+        } else if (k === 'ngrams') {
+          const r = await getJSON(`/api/crawl/ngrams?url=${encodeURIComponent(val('v2u'))}&n=${encodeURIComponent(val('v2n') || 2)}&limit=60`);
+          html = `<div class="hint">${q(num(r.words || 0))} words read (${q(r.source || '')}).</div><table class="lt"><thead><tr><th>Phrase</th><th>Count</th><th>Density</th></tr></thead><tbody>` +
+            (r.ngrams || []).map(x => `<tr><td>${q(x.phrase)}</td><td>${q(x.count)}</td><td>${q(x.density)}%</td></tr>`).join('') + '</tbody></table>';
+        } else if (k === 'clusters') {
+          const r = await getJSON('/api/crawl/clusters');
+          const cl = r.clusters || [];
+          html = `<div class="hint">Method: ${q(r.method || '')}${r.note ? ' · ' + q(r.note) : ''}</div>` + (cl.length ? `<table class="lt"><thead><tr><th>Topic</th><th>Pages</th><th>Example pages</th></tr></thead><tbody>` +
+            cl.map(c => `<tr><td><b>${q(c.label || c.name || c.id)}</b></td><td>${q(c.size || (c.urls || []).length || 0)}</td><td>${(c.urls || c.examples || []).slice(0, 3).map(link).join('<br>')}</td></tr>`).join('') + '</tbody></table>' : '<div class="hint">No topic clusters for this crawl.</div>');
+        } else if (k === 'segment') {
+          const r = await sendJSON('/api/crawl/segments/test', {url: val('v2u')});
+          html = `<div class="info">${r.in_crawl ? (r.segment ? `In segment <b>${q(r.segment)}</b>.` : 'In no segment (none of the rules matches).') : q(r.reason || 'Not in the crawl.')}</div>`;
+        } else if (k === 'profiles') {
+          const r = await sendJSON('/api/profiles/compare', {a: val('v2pa'), b: val('v2pb')});
+          html = (r.changes || []).length ? `<table class="lt"><thead><tr><th>Option</th><th>${q(r.a)}</th><th>${q(r.b)}</th></tr></thead><tbody>` +
+            r.changes.map(c => `<tr><td>${q(c.option)}</td><td><code>${q(JSON.stringify(c.a))}</code></td><td><code>${q(JSON.stringify(c.b))}</code></td></tr>`).join('') + '</tbody></table>' : '<div class="info">The two profiles have the same options.</div>';
+        } else if (k === 'sheets') {
+          const r = await sendJSON('/api/sheets/export', {kind: 'tab', tab: state.tab, filters: [state.filter]});
+          html = `<div class="info">Exported: ${link(r.url || r.sheet_url || '')}</div>`;
+        } else if (k === 'snippets') {
+          const r = await getJSON('/api/custom-js/snippets');
+          T.snip = r.snippets || [];
+          html = T.snip.map((s, i) => `<div class="info" style="margin:8px 0"><b>${q(s.name)}</b> <small class="muted">${q(s.type)}</small><div class="hint" style="margin:2px 0">${q(s.description)}</div><pre style="white-space:pre-wrap;max-height:140px;overflow:auto">${q(s.code)}</pre><button class="btn btn-line btn-sm" onclick="navigator.clipboard.writeText(V2snip(${i})); toast('Copied.', 'info', 2000)">Copy</button></div>`).join('');
+        }
+        T.out[k] = {html};
+      } catch (e) { T.out[k] = {err: e.message}; }
+      T.busy = ''; if (dlgOn('v2tools')) dlgRender();
+    }
+    window.V2snip = i => ((T.snip || [])[i] || {}).code || '';
   })();
   </script>
 </body>
