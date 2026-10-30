@@ -9,6 +9,8 @@ Trend history (W10) and the small endpoints (W11), PLAN4_build.md 10.4:
   POST /api/profiles/compare              {a, b} -> {changes: [{option, a, b}]}
   POST /api/robots/test                   {robots_txt?, url, user_agent} -> {allowed, rule, line, group, path, source}
   GET  /api/custom-js/snippets            {snippets}   (also /api/config/js-snippets)
+  POST /api/crawl/extract-preview         {url, source, extractors, searches} -> the rules' values on one crawled page
+       (U9 point-and-click extractor; the crawl's own code on the stored HTML)
 """
 import threading
 from typing import Any, Dict, List, Optional
@@ -373,6 +375,58 @@ def logs_delete(request: Request):
         _logs_job.clear()
         _logs_job["state"] = "idle"
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------------------------
+# U9: Custom Extraction / Custom Search preview on one crawled page (the point-and-click extractor)
+# ---------------------------------------------------------------------------------------------
+PREVIEW_VALUES_MAX = 20
+PREVIEW_VALUE_CHARS = 2000
+
+
+@router.post("/api/crawl/extract-preview")
+async def extract_preview(request: Request):
+    """{url, source: "original" | "rendered", extractors: [rule], searches: [rule]} -> {url, source, extraction:
+    {name: [values]}, counts: {name: n}, search: {name: occurrences}, problems, reason?}. The rules run on the crawl's
+    stored HTML of that page with the code the crawl uses (custom_rules_on_html), after the logins' values are masked,
+    so the preview is what the crawl extracts. At most 10 rules of each kind; the first 20 values of each are sent."""
+    b = await _body(request)
+    A = _A()
+    job = A.session.job
+    if job is None or job.crawler is None:
+        raise HTTPException(status_code=404, detail="No crawl data available.")
+    site, _ = A._site_index(job)
+    r = A._find_crawled(site, str(b.get("url") or "").strip()) if site is not None else None
+    if r is None:
+        raise HTTPException(status_code=404, detail="Pick a page of the crawl.")
+    from crawler.seo.extract import MAX_CUSTOM_RULES, ExtractOptions, custom_rules_on_html
+    source = "rendered" if str(b.get("source") or "").strip().lower() == "rendered" else "original"
+    out: Dict[str, Any] = {"url": r.url, "source": source, "extraction": {}, "counts": {}, "search": {}, "problems": []}
+    if source == "rendered":
+        rstore = A._safe(lambda: A._rendered_store(job), None)
+        html = A._safe(lambda: rstore.get(r.url), None) if rstore is not None else None
+        why = A._safe(lambda: A._not_rendered_reason(job, r.url), "") or "This page was not rendered in Chrome."
+    else:
+        store = getattr(job.crawler, "source_store", None)
+        html = A._safe(lambda: store.get(r.url), None) if store is not None else None
+        why = ("The page HTML was not kept for this crawl (Store HTML is off)." if store is None else
+               "Only HTML pages of the crawled site are kept; this URL is not one.")
+    if html is None:
+        out["reason"] = why
+        return out
+    rules = lambda k: [x for x in (b.get(k) or []) if isinstance(x, dict)][:MAX_CUSTOM_RULES] if isinstance(b.get(k), list) else []
+    opts = ExtractOptions.from_config(None, custom_searches=rules("searches"), custom_extractors=rules("extractors"),
+                                      top_terms=False)
+    out["problems"] = [str(p) for p in opts.problems]
+    if not (opts.searches or opts.extractors):
+        return out
+    from starlette.concurrency import run_in_threadpool     # the parse and the user's rules: off the event loop
+    search, extraction = await run_in_threadpool(lambda: custom_rules_on_html(job.mask(html), opts))
+    out["search"] = dict(search)
+    for name, values in extraction.items():
+        out["counts"][name] = len(values)
+        out["extraction"][name] = [str(v)[:PREVIEW_VALUE_CHARS] for v in values[:PREVIEW_VALUES_MAX]]
+    return out
 
 
 def install(app) -> None:

@@ -172,7 +172,7 @@
     .progress-fill { height: 100%; width: 0; background: var(--progress-fill); border-radius: 999px; transition: width .4s ease, background-color var(--dur-2) ease; }
     .progress-fill.bad { background: var(--progress-bad); }
     .progress-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
-    .progress-sub { font-size: 10.5px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+    .progress-sub { font-size: 12px; line-height: 15px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
     .server { font-size: 11px; display: flex; align-items: center; gap: 5px; color: var(--muted); white-space: nowrap; }
     .server i { width: 7px; height: 7px; border-radius: 50%; background: var(--c3-dot); display: inline-block; flex: none; }
     .server.ok i { background: var(--f2); }
@@ -2962,7 +2962,7 @@ Now: ${bits.join(', ')}` : '');
     }
     function renderProgress(d) {
       const s = state.stats || {}, st = state.status;
-      let p = 0, label = 'Idle', sub = 'Ready';
+      let p = 0, label = 'Idle', sub = 'Ready', subTip = '';
       // Finished URLs (what the INTERNAL tile counts); the engine's total_crawled also counts requests in flight
       const crawled = typeof state.resultsCount === 'number' ? state.resultsCount : state.results.length;
       const found = Math.max(s.total_discovered || 0, crawled), inflight = Math.max(0, (s.total_crawled || 0) - crawled);
@@ -2970,7 +2970,9 @@ Now: ${bits.join(', ')}` : '');
         p = found > 1 ? Math.min(98, Math.max(3, Math.round(crawled / found * 100))) : 3;
         label = `${st === 'paused' ? 'Paused' : 'Crawling'}${found > 1 && (s.queue_size || 0) > 0 ? ` ${p}%` : '…'}`;
         const rate = s.elapsed_seconds ? (crawled / s.elapsed_seconds).toFixed(1) : '0';
-        sub = `${crawled.toLocaleString()} of ${found.toLocaleString()} URLs${inflight ? ` · ${inflight} in progress` : ''} · queue ${s.queue_size || 0} · ${rate} URL/s · ${fmtDur(s.elapsed_seconds)}`;
+        // the elapsed time right after the counts, so a narrow bar never cuts it off; requests in flight in the tooltip
+        sub = `${crawled.toLocaleString()} of ${found.toLocaleString()} URLs · ${fmtDur(s.elapsed_seconds)} · queue ${s.queue_size || 0} · ${rate} URL/s`;
+        subTip = `${sub}${inflight ? ` · ${inflight} in progress` : ''}`;
       } else if (st === 'analyzing') {
         const ep = state.evidence || {};
         p = ep.total ? Math.round(ep.done / ep.total * 100) : 100;
@@ -2986,6 +2988,7 @@ Now: ${bits.join(', ')}` : '');
       $('progressFill').classList.toggle('bad', st === 'auth_failed' || st === 'stopped');
       $('progressLabel').textContent = label;
       $('progressSub').textContent = sub;
+      $('progressSub').title = subTip || sub;
       if (st === 'running') noteRate(crawled);
       // the loading view until the first rows arrive (it stays up while a just-started crawl has no status yet)
       const going = st === 'running' || st === 'paused' || st === 'analyzing';
@@ -9602,7 +9605,9 @@ ${fallback}`;
     // ---- Compare settings (Mode > Compare, or two crawls ticked under File > Crawls) ----
     const CHANGE_EL = [['title', 'Page title'], ['meta_description', 'Meta description'], ['h1', 'H1'], ['word_count', 'Word count'], ['crawl_depth', 'Crawl depth'],
                        ['inlinks', 'Internal inlinks'], ['indexability', 'Indexability'], ['status', 'Status code'], ['canonical', 'Canonical'],
-                       ['structured_data', 'Structured data types'], ['content', 'Content (similarity)']];
+                       ['structured_data', 'Structured data types'], ['content', 'Content (similarity)'],
+                       ['unique_inlinks', 'Unique inlinks'], ['internal_outlinks', 'Internal outlinks'], ['unique_internal_outlinks', 'Unique internal outlinks'],
+                       ['external_outlinks', 'External outlinks'], ['unique_external_outlinks', 'Unique external outlinks']];
     function compareOptsHtml(sel) {
       const o = cr.cmpOpts, sorted = sel.slice().sort((a, b) => String(a.started_at || '').localeCompare(String(b.started_at || '')));
       return `<h5>Previous → Current</h5><div class="hint" style="margin-top:0">${sorted.length === 2 ? `Previous: <b>${esc(crName(sorted[0]))}</b> (${esc(fmtDate(sorted[0].started_at))}) &#8594; Current: <b>${esc(crName(sorted[1]))}</b> (${esc(fmtDate(sorted[1].started_at))})` : 'Tick two crawls above. The older one is the previous crawl.'}</div>` +
@@ -12989,6 +12994,621 @@ ${fallback}`;
       T.busy = ''; if (dlgOn('v2tools')) dlgRender();
     }
     window.V2snip = i => ((T.snip || [])[i] || {}).code || '';
+  })();
+  </script>
+  <script>
+  /* ARACHNIX 2.0 Compare additions (U10): the comparison report download, IndexNow submission of the new and changed
+     URLs (dry run first, the engines named) and the "Not comparable" checks with their reason. */
+  (function () {
+    const q = v => esc(v == null ? '' : v);
+    const base = renderComparePanel;
+    renderComparePanel = function () {
+      base();
+      const D = cmp.data, body = document.querySelector('#panelView .cmpbody');
+      if (!D || !body || cmp.loading || cmp.err || !cmp.req) return;
+      const nc = (D.overview || []).filter(r => r.not_comparable);
+      const changed = D.settings_changed || [];
+      const bar = document.createElement('div');
+      bar.className = 'v2cmpbar';
+      bar.innerHTML = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px"><button class="btn btn-line" onclick="V2cmpReport()">Download comparison report (Excel)</button>` +
+        `<button class="btn btn-line" onclick="V2indexNow()">Submit new / changed URLs to IndexNow…</button></div>` +
+        (nc.length || changed.length ? `<div class="info"><b>Not comparable:</b> a setting that decides these checks changed between the two crawls, so their URLs are not compared.` +
+          `<ul style="margin:6px 0 0 18px">${changed.map(s => `<li>${q(s.setting)}: ${q(String(s.previous))} &#8594; ${q(String(s.current))}</li>`).join('')}` +
+          `${nc.slice(0, 30).map(r => `<li>${q(r.tab_name && r.filter_name ? `${r.tab_name} › ${r.filter_name}` : r.key)}: ${q(r.not_comparable)}</li>`).join('')}</ul></div>` : '');
+      body.insertBefore(bar, body.firstChild);
+    };
+    // the report of exactly the comparison on screen (URL Mapping, thresholds, checks), errors as a toast
+    window.V2cmpReport = () => {
+      const R = cmp.req || {}, req = {a: R.a || '', b: R.b || 'current', url_map: R.url_map || null,
+                                     change_detection: Array.isArray(R.change_detection) ? R.change_detection : null, thresholds: R.thresholds || null};
+      downloadFile(`/api/crawl/report/compare_overview?format=xlsx&req=${encodeURIComponent(JSON.stringify(req))}`, 'comparison_overview.xlsx', 'the comparison report');
+    };
+    window.V2indexNow = async () => {
+      const body = {source: 'compare', a: cmp.req.a, b: cmp.req.b || 'current', url_map: cmp.req.url_map || null, dry_run: true};
+      let r;
+      try { r = await sendJSON('/api/indexnow/submit', body); } catch (e) { toast(q(e.message), 'warn', 9000); return; }
+      const n = r.count || 0, left = r.left_out_count != null ? r.left_out_count : (r.left_out || []).length;
+      const ok = await ask({title: 'Submit to IndexNow?', ok: n ? `Submit ${num(n)} URL(s)` : 'OK',
+        text: `${num(n)} new or changed indexable URL(s) of ${q(r.host || '')} would be sent${left ? ` (${num(left)} left out: not indexable or on another site)` : ''}. ` +
+              `${q(r.engines_note || 'IndexNow tells Bing, Yandex, Seznam, Naver and Yep; Google does not take part.')}`});
+      if (!ok || !n) return;
+      try {
+        const s = await sendJSON('/api/indexnow/submit', Object.assign(body, {dry_run: false})), ok = s.submitted > 0;
+        toast(ok ? `Submitted ${num(s.submitted)} URL(s).${s.detail ? ' ' + q(s.detail) : ''}` : q(s.detail || 'Nothing was submitted.'), ok ? 'info' : 'warn', 9000);
+      }
+      catch (e) { toast(q(e.message), 'warn', 9000); }
+    };
+  })();
+  </script>
+  <script>
+  /* ARACHNIX 2.0 lower-pane additions (U13): SERP preview for desktop / tablet / mobile with live editing of the title
+     and description (estimates: Google's layout changes), and a line diff of the original against the rendered
+     HTML in View Source (our own Myers diff, capped for very large pages). Everything through esc(). */
+  (function () {
+    const q = v => esc(v == null ? '' : v);
+    const U = {dev: 'desktop', edit: {}};
+    const DEV = {desktop: {w: 600, tl: 1, dl: 2, tf: 20, label: 'Desktop'}, tablet: {w: 560, tl: 2, dl: 3, tf: 18, label: 'Tablet'},
+                 mobile: {w: 360, tl: 2, dl: 3, tf: 18, label: 'Mobile'}};
+    const clamp = n => `display:-webkit-box;-webkit-line-clamp:${n};-webkit-box-orient:vertical;overflow:hidden`;
+    const baseSerp = serpHtml;
+    serpHtml = function (d) {
+      const html = baseSerp(d);
+      if (!d || !d.serp || notPageReason(d)) return html;
+      const u = state.selUrl, E = U.edit[u] || {}, s = d.serp;
+      const title = E.title != null ? E.title : (s.title || ''), desc = E.desc != null ? E.desc : (s.description || '');
+      const tpx = E.title == null && s.title_px ? s.title_px : Math.round(measure(title, '20px Arial') || 0);
+      const dpx = E.desc == null && s.description_px ? s.description_px : Math.round(measure(desc, '14px Arial') || 0);
+      const bar = `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 8px">` +
+        Object.entries(DEV).map(([k, v]) => `<button class="pill ${U.dev === k ? 'on' : ''}" onclick="V2dev('${k}')">${v.label}</button>`).join('') +
+        `<span class="hint" style="margin:0 0 0 8px">Try your own text:</span></div>` +
+        `<div style="display:flex;gap:6px;margin:0 0 8px"><input id="v2st" value="${q(title)}" placeholder="Title" style="flex:1" oninput="if (!event.isComposing) V2serp('title', this.value)" oncompositionend="V2serp('title', this.value)">` +
+        `<button class="btn btn-line btn-sm" onclick="V2serpReset()">Reset</button></div>` +
+        `<textarea id="v2sd" placeholder="Meta description" style="width:100%;min-height:52px" oninput="if (!event.isComposing) V2serp('desc', this.value)" oncompositionend="V2serp('desc', this.value)">${q(desc)}</textarea>` +
+        `<div class="hint">Title ${num(title.length)} characters, about ${num(tpx)} px (Google cuts near ${num(TITLE_MAX)} px on desktop) · ` +
+        `Description ${num(desc.length)} characters, about ${num(dpx)} px (near ${num(DESC_MAX)} px on desktop).</div>`;
+      if (U.dev === 'desktop') return bar + (E.title == null && E.desc == null ? html :          // the desktop preview, re-measured
+        baseSerp(Object.assign({}, d, {serp: Object.assign({}, s, {title, title_px: tpx, description: desc, description_px: dpx})})));
+      const D = DEV[U.dev];
+      let host = '';
+      try { host = new URL(s.url || (d.result || {}).url || '').hostname.replace(/^www\./, ''); } catch (e) { host = ''; }
+      const card = `<div style="width:${D.w}px;max-width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:#fff;color:#202124;font-family:Arial,sans-serif">` +
+        `<div style="font-size:12px;color:#4d5156;margin-bottom:4px">${q(host)}</div>` +
+        `<div style="font-size:${D.tf}px;line-height:1.3;color:#1a0dab;${clamp(D.tl)}">${title ? q(title) : '<i>No title: Google will make one up</i>'}</div>` +
+        `<div style="font-size:14px;line-height:1.58;color:#4d5156;margin-top:4px;${clamp(D.dl)}">${desc ? q(desc) : '<i>No meta description: Google will pick text from the page</i>'}</div></div>` +
+        `<div class="hint">${D.label} preview: an estimate of what fits (Google's layout and limits change). Your edits are not saved: copy them into your CMS.</div>`;
+      return bar + card;
+    };
+    window.V2dev = k => { U.dev = k; renderDetail(); };
+    window.V2serp = (k, v) => {
+      (U.edit[state.selUrl] = U.edit[state.selUrl] || {})[k] = v;
+      const keep = document.activeElement && document.activeElement.id, pos = keep ? document.activeElement.selectionStart : 0;
+      renderDetail();
+      const el = keep && document.getElementById(keep);
+      if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) { /* textarea */ } }
+    };
+    window.V2serpReset = () => { delete U.edit[state.selUrl]; renderDetail(); };
+
+    // ---- View Source: line diff ----
+    function myers(a, b, maxD) {
+      const n = a.length, m = b.length, max = Math.min(n + m, maxD), off = max + 1, v = new Int32Array(2 * max + 3), trace = [];
+      for (let d = 0; d <= max; d++) {
+        trace.push(v.slice());
+        for (let k = -d; k <= d; k += 2) {
+          let x = (k === -d || (k !== d && v[off + k - 1] < v[off + k + 1])) ? v[off + k + 1] : v[off + k - 1] + 1;
+          let y = x - k;
+          while (x < n && y < m && a[x] === b[y]) { x++; y++; }
+          v[off + k] = x;
+          if (x >= n && y >= m) return backtrack(trace, a, b, off, d);
+        }
+      }
+      return null;      // too different: more than maxD changed lines
+    }
+    function backtrack(trace, a, b, off, dEnd) {
+      const out = [];
+      let x = a.length, y = b.length;
+      for (let d = dEnd; d > 0; d--) {
+        const v = trace[d], k = x - y;
+        const prevK = (k === -d || (k !== d && v[off + k - 1] < v[off + k + 1])) ? k + 1 : k - 1;
+        const px = v[off + prevK], py = px - prevK;
+        while (x > px && y > py) { out.push([' ', a[x - 1]]); x--; y--; }
+        if (x === px) out.push(['+', b[y - 1]]); else out.push(['-', a[x - 1]]);
+        x = px; y = py;
+      }
+      while (x > 0 && y > 0) { out.push([' ', a[x - 1]]); x--; y--; }
+      return out.reverse();
+    }
+    function diffHtml(orig, rend) {
+      const LIM = 6000;
+      const A0 = String(orig || '').replace(/\r\n?/g, '\n').split('\n'), B0 = String(rend || '').replace(/\r\n?/g, '\n').split('\n');
+      const a = A0.slice(0, LIM), b = B0.slice(0, LIM), cut = A0.length > LIM || B0.length > LIM;
+      let ops = myers(a, b, 3000);
+      // cut at LIM lines: the tails of the two sides need not line up, so changes after the last common line are not shown
+      if (ops && cut) { let k = ops.length; while (k > 0 && ops[k - 1][0] !== ' ') k--; ops = ops.slice(0, k); }
+      if (!ops) return '<div class="placeholder">The rendered HTML differs from the original on most lines: open Original and Rendered side by side instead.</div>';
+      const add = ops.filter(o => o[0] === '+').length, del = ops.filter(o => o[0] === '-').length;
+      const keep = new Set();
+      ops.forEach((o, i) => { if (o[0] !== ' ') for (let j = Math.max(0, i - 2); j <= Math.min(ops.length - 1, i + 2); j++) keep.add(j); });
+      let html = '', last = -2, shown = 0;
+      for (let i = 0; i < ops.length && shown < 1500; i++) {
+        if (!keep.has(i)) continue;
+        if (i !== last + 1) html += '<div class="muted" style="padding:2px 0">…</div>';
+        const [t, line] = ops[i];
+        const bg = t === '+' ? 'background:var(--t2)' : t === '-' ? 'background:var(--t4)' : '';
+        html += `<div style="white-space:pre-wrap;word-break:break-all;font-family:var(--mono, Consolas, monospace);font-size:11.5px;${bg}">${t === ' ' ? '&nbsp;' : t} ${q(line.slice(0, 400))}</div>`;
+        last = i; shown++;
+      }
+      return `<div class="hint">${num(add)} line(s) added and ${num(del)} removed by JavaScript (original &#8594; rendered${cut ? `, first ${num(LIM)} lines` : ''}).</div>` +
+        (add || del ? `<div class="srcpre" style="max-height:420px;overflow:auto">${html}</div>` : '<div class="placeholder">No difference: JavaScript did not change the HTML.</div>');
+    }
+    const baseSrc = viewSourceHtml;
+    viewSourceHtml = function (d) {
+      const u = state.selUrl, S = det.src && det.src[u];
+      const R = S ? (S.rendered || ((rendOf(d) || {}).html) || null) : null;
+      if (!d || !S || S.loading || S.err || !S.original || !R) return baseSrc(d);
+      if (det.srcView === 'diff') {
+        const html = baseSrc(Object.assign({}, d));        // the pills (shown with "Original" picked)
+        const pills = html.slice(0, html.indexOf('</div>') + 6);
+        return pills.replace('</div>', `<button class="pill on" onclick="det.srcView='diff'; renderDetail()">Line diff</button></div>`) + diffHtml(S.original, R);
+      }
+      const html = baseSrc(d);
+      const at = html.indexOf('</div>');
+      return at < 0 || !html.startsWith('<div class="pills">') ? html : html.slice(0, at) + `<button class="pill" onclick="det.srcView='diff'; renderDetail()">Line diff</button>` + html.slice(at);
+    };
+  })();
+  </script>
+  <script>
+  /* ARACHNIX 2.0 tree graph metrics (U12): "Colour by" and "Size by" for the Crawl Tree Graph and the Directory Tree
+     Graph. Shape stays the status class and the status legend keeps its counts; the metric legend adds bins whose
+     counts add up to the nodes of the tree. A missing value is Not checked (hollow grey), never 0. Colours: viridis,
+     readable with colour-blindness, in light and dark. */
+  (function () {
+    const q = v => esc(v == null ? '' : v);
+    const KEY = 'arachnix_v2_treemetric';
+    const VM = Object.assign({crawl_tree: {color: 'status', size: 'default'}, dir_tree: {color: 'status', size: 'default'}}, store.get(KEY, {}) || {});
+    const PICK = {
+      crawl_tree: {color: [['status', 'Status'], ['depth', 'Crawl depth'], ['indexability', 'Indexability'], ['link_score', 'Link Score'],
+                           ['unique_inlinks', 'Unique inlinks'], ['response_time', 'Response time'], ['word_count', 'Word count']],
+                   size: [['default', 'Same size'], ['link_score', 'Link Score'], ['unique_inlinks', 'Unique inlinks'], ['response_time', 'Response time'], ['word_count', 'Word count']]},
+      dir_tree: {color: [['status', 'Worst status'], ['urls', 'URLs'], ['indexable_share', 'Indexable share']],
+                 size: [['default', 'URLs'], ['indexable_share', 'Indexable share']]},
+    };
+    const LABEL = {depth: 'Crawl depth', indexability: 'Indexability', link_score: 'Link Score', unique_inlinks: 'Unique inlinks', response_time: 'Response time (s)',
+                   word_count: 'Word count', urls: 'URLs', indexable_share: 'Indexable share (%)'};
+    const VIR = ['#440154', '#3b528b', '#21918c', '#5ec962', '#fde725'], VIR6 = ['#440154', '#414487', '#2a788e', '#22a884', '#7ad151', '#fde725'];
+    const IDX = {Indexable: '#2166ac', 'Non-indexable': '#e08214'};
+    const NEED_API = new Set(['link_score', 'unique_inlinks', 'response_time', 'word_count']);
+    const MX = {key: null, map: null, loading: false, err: ''};
+    const cur = () => VM[vt.kind] || {color: 'status', size: 'default'};
+
+    // the crawl tree's metrics: fetched once per tree (metrics=1), else Not checked
+    function metricsFor(id) {
+      const D = vizS.data;
+      if (!D || D.local) return null;
+      if (MX.key !== D) { MX.key = D; MX.map = null; MX.err = ''; MX.loading = false; }
+      if (!MX.map && !MX.loading && !MX.err) {
+        MX.loading = true;
+        const want = D;
+        getJSON('/api/crawl/graph?type=crawl_tree&limit=5000&metrics=1')
+          .then(r => { if (MX.key === want) MX.map = new Map((r.nodes || []).map(n => [n.id, n.metrics || {}])); })
+          .catch(e => { if (MX.key === want) MX.err = e.message || 'not available'; })
+          .finally(() => { MX.loading = false; if (vt.on && MX.key === vizS.data) { vtDraw(); vmLegend(); } });
+      }
+      return MX.map ? (MX.map.get(id) || null) : null;
+    }
+    const nodeById = () => {
+      const D = vizS.data || {};
+      if (D !== nodeById.k) { nodeById.k = D; nodeById.m = new Map((D.nodes || []).map(n => [n.id, n])); }
+      return nodeById.m;
+    };
+    // the value of a metric for a model node; null = Not checked
+    function val(m, k) {
+      if (!m || m.virtual) return null;
+      if (vt.kind === 'dir_tree') {
+        if (k === 'urls') return m.urls || 0;
+        if (k === 'indexable_share') return m.urls ? Math.round(1000 * (m.indexable || 0) / m.urls) / 10 : null;
+        return null;
+      }
+      const n = nodeById().get(m.id) || {};
+      if (k === 'depth') { const d = n.depth ?? (state.byUrl.get(m.id) || {}).depth; return d == null ? null : Number(d); }
+      if (k === 'indexability') return m.indexable === true ? 'Indexable' : m.indexable === false ? 'Non-indexable' : null;
+      if (k === 'response_time' && (vizS.data || {}).local) { const r = state.byUrl.get(m.id); return r && r.response_time_ms ? r.response_time_ms / 1000 : null; }
+      if (NEED_API.has(k)) { const x = metricsFor(m.id); const v = x ? x[k] : null; return v == null || v === '' ? null : Number(v); }
+      return null;
+    }
+    // bins of a numeric metric over every node of the tree (not only those on screen), so the legend adds up
+    function scale(k) {
+      const nodes = [...vt.model.M.values()].filter(m => !m.virtual);
+      if (k === 'indexability') {
+        const c = {Indexable: 0, 'Non-indexable': 0, nc: 0};
+        nodes.forEach(m => { const v = val(m, k); if (v) c[v]++; else c.nc++; });
+        return {cat: true, color: v => IDX[v], bins: Object.keys(IDX).map(l => ({label: l, color: IDX[l], n: c[l]})), nc: c.nc, total: nodes.length};
+      }
+      const vals = nodes.map(m => val(m, k)), got = vals.filter(v => v != null && isFinite(v)).sort((a, b) => a - b);
+      const nc = vals.length - got.length, lo = got.length ? got[0] : 0, hi = got.length ? got[got.length - 1] : 0;
+      if (k === 'depth') {
+        const cl = v => Math.min(5, Math.max(0, Math.round(v)));
+        const n = [0, 0, 0, 0, 0, 0]; got.forEach(v => n[cl(v)]++);
+        return {cat: true, color: v => VIR6[cl(v)], bins: n.map((c, i) => ({label: i === 5 ? '5+' : String(i), color: VIR6[i], n: c})).filter(b => b.n), nc, total: nodes.length, lo, hi};
+      }
+      const cuts = [];
+      [0.2, 0.4, 0.6, 0.8].forEach(p => { const v = got[Math.min(got.length - 1, Math.floor(p * got.length))]; if (got.length && v > (cuts.length ? cuts[cuts.length - 1] : lo) && v <= hi) cuts.push(v); });
+      const bin = v => { let i = 0; while (i < cuts.length && v >= cuts[i]) i++; return i; };
+      const used = cuts.length + 1, pal = ({1: [2], 2: [0, 4], 3: [0, 2, 4], 4: [0, 1, 3, 4]}[used] || [0, 1, 2, 3, 4]).map(i => VIR[i]);
+      const n = new Array(used).fill(0); got.forEach(v => n[bin(v)]++);
+      const fmt = v => k === 'response_time' ? String(Math.round(v * 1000) / 1000) : num(Math.round(v * 10) / 10);
+      const bins = n.map((c, i) => ({label: `${fmt(i ? cuts[i - 1] : lo)}${i < used - 1 ? ` to < ${fmt(cuts[i])}` : (hi > (i ? cuts[i - 1] : lo) ? ` to ${fmt(hi)}` : '')}`, color: pal[i], n: c}));
+      return {cat: false, color: v => pal[bin(v)], bins: got.length ? bins.filter(b => b.n) : [], nc, total: nodes.length, lo, hi};
+    }
+    let SC = null;
+    const scaleFor = k => { if (!SC || SC.k !== k || SC.model !== vt.model || SC.ready !== !!MX.map) SC = Object.assign(scale(k), {k, model: vt.model, ready: !!MX.map}); return SC; };
+
+    // size: radius 3.5 to 11 px (the row is 24 px) by the square root of the value
+    const baseLayout = vtLayout;
+    vtLayout = function () {
+      const L = baseLayout();
+      const k = vt.on && (vt.kind === 'crawl_tree' || vt.kind === 'dir_tree') ? cur().size : 'default';
+      if (k === 'default') return L;
+      const all = [...vt.model.M.values()].map(m => val(m, k)).filter(v => v != null && isFinite(v));
+      const lo = all.reduce((m, v) => Math.min(m, v), 0), hi = all.reduce((m, v) => Math.max(m, v), 1);
+      L.items.forEach(it => {
+        if (it.more || it.m.virtual) return;
+        const v = val(it.m, k);
+        it.r = v == null ? 3.5 : 3.5 + 7.5 * Math.sqrt((v - lo) / ((hi - lo) || 1));
+      });
+      L.maxX = L.items.reduce((m, it) => Math.max(m, it.x + it.r + 7 + it.lw), 0);
+      return L;
+    };
+    const fmtVal = (k, v) => v == null ? 'Not checked' : k === 'indexability' ? v : k === 'response_time' ? `${v} s` : k === 'indexable_share' ? `${v}%` : num(v);
+    const baseDraw = vtDraw;
+    let drawing = 0;
+    vtDraw = function (again) {
+      drawing++;
+      try { baseDraw(again); } finally { drawing--; }
+      if (drawing || !vt.on || !vt.L) return;     // the outer call styles the final drawing once
+      const P = cur(), ck = P.color, sk = P.size;
+      if (ck === 'status' && sk === 'default') return;
+      const S = ck !== 'status' ? scaleFor(ck) : null;
+      document.querySelectorAll('#vtNodes .vt-node').forEach(el => {
+        const it = vt.L.byId.get(el.dataset.id); if (!it || it.more || it.m.virtual) return;
+        const dot = el.querySelector('.vt-dot'), tip = el.querySelector('title');
+        const extra = [];
+        if (S) {
+          const v = val(it.m, ck);
+          if (dot) {
+            if (v == null) { dot.style.fill = 'transparent'; dot.style.stroke = 'var(--muted)'; dot.style.strokeDasharray = '2 1.5'; dot.style.strokeWidth = '1.4'; }
+            else { dot.style.fill = S.color(v); dot.style.stroke = 'var(--ink)'; dot.style.strokeOpacity = '.45'; dot.style.strokeWidth = '.8'; dot.style.strokeDasharray = ''; }
+          }
+          extra.push(`${LABEL[ck]}: ${fmtVal(ck, v)}`);
+        }
+        if (sk !== 'default' && sk !== ck) extra.push(`${LABEL[sk]} (size): ${fmtVal(sk, val(it.m, sk))}`);
+        if (tip && extra.length) tip.textContent += '\n' + extra.join('\n');
+      });
+    };
+    function vmLegend() {
+      const el = document.getElementById('vmLegend'); if (!el || !vt.model) return;
+      const P = cur(), k = P.color;
+      const loading = (NEED_API.has(k) || NEED_API.has(P.size)) && vt.kind === 'crawl_tree' && !(vizS.data || {}).local && !MX.map;
+      if (loading && !MX.err) { metricsFor(''); el.innerHTML = `<span class="muted">${MX.loading ? 'Loading the metrics…' : ''}</span>`; return; }
+      if (k === 'status') { el.innerHTML = P.size === 'default' ? '' : `<span class="muted">Size = ${q(LABEL[P.size])} (bigger = higher; Not checked = smallest)</span>`; return; }
+      const S = scaleFor(k), sw = c => `<i style="display:inline-block;width:11px;height:11px;border-radius:50%;background:${c};border:1px solid rgba(127,127,127,.6);vertical-align:-1px;margin-right:4px"></i>`;
+      el.innerHTML = `<span><b>${q(LABEL[k])}:</b></span>` + S.bins.map(b => `<span>${sw(b.color)}${q(b.label)} <b>${num(b.n)}</b></span>`).join('') +
+        `<span><i style="display:inline-block;width:11px;height:11px;border-radius:50%;border:1.4px dashed var(--muted);vertical-align:-1px;margin-right:4px"></i>Not checked <b>${num(S.nc)}</b></span>` +
+        `<span class="muted">= ${num(S.total)} ${vt.kind === 'crawl_tree' ? 'URLs' : 'folders'}${MX.err && vt.kind === 'crawl_tree' && NEED_API.has(k) ? ` (metrics not available: ${q(MX.err)})` : ''} · shape = status</span>`;
+    }
+    window.V2treePick = (what, v) => {
+      const k = vt.kind; VM[k] = Object.assign({}, cur(), {[what]: v}); store.set(KEY, VM);
+      vtDraw(); vmLegend();
+    };
+    const baseRender = vtRender;
+    vtRender = function (pv, head, kind) {
+      baseRender(pv, head, kind);
+      const P = PICK[kind]; if (!P) return;
+      const C = cur(), sel = (what, list) => `<select aria-label="${what === 'color' ? 'Colour by' : 'Size by'}" onchange="V2treePick('${what}', this.value)" style="max-width:150px">` +
+        list.map(([k, l]) => opt(k, l, C[what])).join('') + '</select>';
+      const bar = pv.querySelector('.pbar'), tools = bar && bar.querySelector('.dd-tools');
+      if (tools) {
+        const s = document.createElement('span'); s.className = 'dd-tools v2treepick';
+        s.innerHTML = `<span class="muted" style="font-size:11px">Colour</span>${sel('color', P.color)}<span class="muted" style="font-size:11px">Size</span>${sel('size', P.size)}`;
+        bar.insertBefore(s, tools);
+      }
+      const g = pv.querySelector('.gsub .legend');
+      if (g && !document.getElementById('vmLegend')) { const d = document.createElement('div'); d.className = 'legend'; d.id = 'vmLegend'; g.after(d); }
+      vmLegend();
+    };
+  })();
+  </script>
+  <script>
+  /* ARACHNIX 2.0 custom rules (U9): Custom Search "Search in" head / body / text without links / one element (with
+     its selector) and Bulk add; Custom Extraction regex options (reads HTML or page text, match case) and the
+     point-and-click extractor; Custom JavaScript snippets from the library. The extractor shows the crawl's stored
+     page in an iframe sandboxed WITHOUT allow-scripts (the page's own scripts never run; this page reads the frame's
+     DOM to build the selectors) and previews the values with the crawl's own code (/api/crawl/extract-preview). */
+  (function () {
+    const q = v => esc(v == null ? '' : v);
+    RULE_COLS.searches = RULE_COLS.searches.map(c => c[0] !== 'where' ? c : ['where', 'Search in', [['html', 'HTML'], ['text', 'Page text'], ['head', 'Head'], ['body', 'Body'],
+      ['text_no_anchors', 'Page text without links'], ['element', 'One element (selector)']]]);
+    RULE_COLS.searches.push(['selector', 'Element (CSS or XPath)', 'text', '.price or //div[@id="main"]']);
+    RULE_COLS.extractors.push(['source', 'Regex reads', [['html', 'HTML'], ['text', 'Page text']]], ['case_sensitive', 'Match case (regex)', 'bool']);
+    Object.assign(RULE_BLANK.searches, {selector: ''});
+    Object.assign(RULE_BLANK.extractors, {source: 'html', case_sensitive: true});
+    // rules saved before 2.0: an extractor without case_sensitive matched case unless ignore_case was set
+    function normalise() {
+      cfgx.extractors.forEach(r => { if (r.case_sensitive === undefined) r.case_sensitive = !r.ignore_case; if (!r.source) r.source = 'html'; });
+      cfgx.searches.forEach(r => { if (r.selector === undefined) r.selector = ''; });
+    }
+    const baseLoad = loadCfgx;
+    loadCfgx = function () { baseLoad(); normalise(); };
+    const MAXR = MAX_RULES;
+    let SNIPS = null;
+    const baseRules = renderRules;
+    renderRules = function (kind) {
+      if (kind === 'extractors' || kind === 'searches') normalise();    // rules from a profile or settings saved before 2.0
+      baseRules(kind);
+      const box = $(RULE_BOX[kind]); if (!box) return;
+      const off = (i, k, on) => { const el = $(`rule_${kind}_${i}_${k}`); if (el) { el.disabled = !on; const w = el.closest('.rc-bool, div'); if (w) w.style.opacity = on ? '' : '.55'; } };
+      if (kind === 'searches') cfgx.searches.forEach((r, i) => off(i, 'selector', r.where === 'element'));
+      if (kind === 'extractors') cfgx.extractors.forEach((r, i) => { off(i, 'source', r.type === 'regex'); off(i, 'case_sensitive', r.type === 'regex'); });
+      const row = box.querySelector('.btnrow'); if (!row) return;
+      const full = cfgx[kind].length >= MAXR;
+      if (kind === 'searches') row.insertAdjacentHTML('beforeend', `<button class="btn btn-line btn-sm" onclick="V2bulkOpen()" ${full ? `disabled title="At most ${MAXR}"` : ''}>Bulk add…</button>`);
+      if (kind === 'extractors') row.insertAdjacentHTML('beforeend', `<button class="btn btn-line btn-sm" onclick="V2pickOpen()" ${full ? `disabled title="At most ${MAXR}"` : ''}>Pick from a page…</button>`);
+      if (kind === 'js') {
+        if (!SNIPS) { SNIPS = []; getJSON('/api/custom-js/snippets').then(r => { SNIPS = r.snippets || []; renderRules('js'); }).catch(() => { SNIPS = []; }); }
+        if (SNIPS.length) row.insertAdjacentHTML('beforeend', `<select aria-label="Add a snippet from the library" onchange="V2snipAdd(this.value)" ${full ? 'disabled' : ''} style="max-width:260px">` +
+          `<option value="">Add from the snippet library…</option>${SNIPS.map((s, i) => `<option value="${i}">${q(s.name)}</option>`).join('')}</select>`);
+      }
+    };
+    window.V2snipAdd = i => {
+      const s = (SNIPS || [])[Number(i)]; if (!s || i === '' || cfgx.js.length >= MAXR) return;
+      cfgx.js.push({name: String(s.name || 'Snippet').slice(0, 80), type: s.type === 'action' ? 'action' : 'extraction', code: String(s.code || '')});
+      saveCfgx(); renderRules('js'); updateOptSummary();
+      toast(`Added the snippet “${q(s.name)}”.`, 'info', 3000);
+    };
+    normalise();
+    try { renderAllRules(); } catch (e) { /* the drawer is built later */ }
+
+    // ---- Bulk add (Custom Search): one rule per line, "text" or "name | text" / "name<TAB>text" (as the server) ----
+    const B = {text: '', mode: 'contains', where: 'html', selector: '', regex: false, case_sensitive: false};
+    function parseBulk(text) {
+      return String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(line => {
+        let name = '', value = line;
+        for (const sep of ['\t', ' | ']) if (line.includes(sep)) { const at = line.indexOf(sep); name = line.slice(0, at).trim(); value = line.slice(at + sep.length).trim(); break; }
+        return {name: (name || value.slice(0, 80)), mode: B.mode, text: value, regex: B.regex, where: B.where, selector: B.where === 'element' ? B.selector : '', case_sensitive: B.case_sensitive};
+      });
+    }
+    window.V2bulkOpen = () => dlgOpen('v2bulk', '', bulkHtml);
+    window.V2bulk = (k, v, re) => { B[k] = v; if (re) dlgRender(); else { const n = $('v2bulkN'); if (n) n.innerHTML = bulkCount(); } };
+    function bulkCount() {
+      const L = parseBulk(B.text), room = Math.max(0, MAXR - cfgx.searches.length);
+      return `${num(L.length)} search(es) read${L.length > room ? ` · only ${num(room)} fit (at most ${MAXR} searches): the first ${num(room)} are added` : ''}`;
+    }
+    function bulkHtml() {
+      const sel = (k, list) => `<select onchange="V2bulk('${k}', this.value, true)">${list.map(([v, l]) => opt(v, l, B[k])).join('')}</select>`;
+      return dlgShell({title: 'Bulk add searches', body:
+        '<p>One search per line: the text alone, or a name and the text separated by <code> | </code> or a tab. Every line takes the options below.</p>' +
+        `<textarea id="v2bulkT" rows="8" style="width:100%" spellcheck="false" placeholder="Has price | £&#10;Out of stock&#10;Old brand | (?i)acme ltd" oninput="V2bulk('text', this.value)">${q(B.text)}</textarea>` +
+        `<div class="row2" style="margin-top:8px"><div class="field"><label>Find</label>${sel('mode', [['contains', 'Contains'], ['not_contains', 'Does not contain']])}</div>` +
+        `<div class="field"><label>Search in</label>${sel('where', RULE_COLS.searches.find(c => c[0] === 'where')[2])}</div></div>` +
+        (B.where === 'element' ? `<div class="field"><label for="v2bulkS">Element (CSS or XPath)</label><input id="v2bulkS" value="${q(B.selector)}" spellcheck="false" oninput="V2bulk('selector', this.value)"></div>` : '') +
+        `<label class="opt"><input type="checkbox" ${B.regex ? 'checked' : ''} onchange="V2bulk('regex', this.checked)"><span><b>The texts are regexes</b></span></label>` +
+        `<label class="opt"><input type="checkbox" ${B.case_sensitive ? 'checked' : ''} onchange="V2bulk('case_sensitive', this.checked)"><span><b>Match case</b></span></label>` +
+        `<div class="hint" id="v2bulkN">${bulkCount()}</div>`,
+        foot: '<span style="flex:1"></span><button class="btn btn-line" onclick="dlgClose()">Cancel</button><button class="btn btn-xls" onclick="V2bulkAdd()">Add</button>'});
+    }
+    window.V2bulkAdd = () => {
+      const L = parseBulk(B.text), room = Math.max(0, MAXR - cfgx.searches.length), add = L.slice(0, room);
+      if (!add.length) { toast(L.length ? `No room: at most ${MAXR} searches.` : 'Type at least one line.', 'warn', 4000); return; }
+      cfgx.searches.push(...add); saveCfgx(); renderRules('searches'); updateOptSummary(); dlgClose(true);
+      B.text = '';
+      toast(`Added ${num(add.length)} search(es)${L.length > add.length ? `; ${num(L.length - add.length)} did not fit` : ''}.`, 'info', 4000);
+    };
+
+    // ---- Point-and-click extractor ----
+    const P = {url: '', source: 'original', html: null, rendered: false, reason: '', loading: false, pick: null, type: 'css', expr: '', all: false,
+               extract: 'text', attr: '', name: '', pv: null, pvBusy: false, loadSeq: 0, pvSeq: 0, autoAttr: false};
+    const pagesOf = () => state.results.filter(r => r.status_code === 200 && /html/i.test(r.content_type || 'text/html') && (r.resource_type || 'page') === 'page');
+    window.V2pickOpen = () => {
+      const sel = state.selUrl && pagesOf().some(r => r.url === state.selUrl) ? state.selUrl : ((pagesOf()[0] || {}).url || '');
+      if (!P.url || P.url !== sel && sel) P.url = sel;
+      dlgOpen('v2pick', 'wide', pickHtml, () => { P.html = null; });
+      pickLoad();
+    };
+    function pickHtml() {
+      const pages = pagesOf().slice(0, 500);
+      return dlgShell({title: 'Pick a value from a page', body:
+        `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px"><select id="v2pkU" aria-label="Page" style="flex:1;min-width:240px" onchange="V2pk('url', this.value)">` +
+        (pages.some(r => r.url === P.url) ? '' : opt(P.url, P.url || 'No HTML page in this crawl', P.url)) + pages.map(r => opt(r.url, r.url, P.url)).join('') + '</select>' +
+        `<div class="seg" role="group" aria-label="HTML"><button class="${P.source === 'original' ? 'on' : ''}" onclick="V2pk('source', 'original')">Original HTML</button><button class="${P.source === 'rendered' ? 'on' : ''}" onclick="V2pk('source', 'rendered')">Rendered HTML</button></div></div>` +
+        '<div class="hint" style="margin-top:0">Click the value you want on the page. The page is shown without its scripts (a safe copy of the crawled HTML), so it can look plainer than in a browser.</div>' +
+        `<div style="display:grid;grid-template-columns:minmax(0,3fr) minmax(260px,2fr);gap:12px;align-items:start">` +
+        `<div id="v2pkView">${P.loading ? axBusy('Loading the page…') : P.reason ? `<div class="placeholder">${q(P.reason)}</div>` : ''}<iframe id="v2pkFrame" title="The crawled page (scripts off)" sandbox="allow-same-origin" referrerpolicy="no-referrer" style="width:100%;height:440px;border:1px solid var(--line);border-radius:8px;background:#fff;${P.html ? '' : 'display:none'}"></iframe></div>` +
+        `<div id="v2pkSide">${sideHtml()}</div></div>`,
+        foot: '<span style="flex:1"></span><button class="btn btn-line" onclick="dlgClose()">Close</button>'});
+    }
+    function sideHtml() {
+      if (!P.pick) return '<div class="placeholder">Nothing picked yet: click an element on the page.</div>';
+      const k = P.pick, attrs = k.attrs || [];
+      const pv = P.pvBusy ? '<div class="hint">Checking with the crawl’s extractor…</div>' : !P.pv ? '' : P.pv.err ? `<div class="result bad">${q(P.pv.err)}</div>` :
+        (P.pv.problems || []).length ? `<div class="result bad">${q(P.pv.problems.join(' · '))}</div>` : P.pv.reason ? `<div class="placeholder">${q(P.pv.reason)}</div>` :
+        `<div class="hint"><b>${num(P.pv.count)}</b> value(s) on this page${P.pv.count > P.pv.values.length ? ` (the first ${num(P.pv.values.length)} shown)` : ''}: what the crawl will extract${P.pv.count >= 20 ? ' (it keeps at most 20 values per page)' : ''}.</div>` +
+        (P.pv.values.length ? `<ol style="margin:4px 0 0 18px;max-height:170px;overflow:auto">${P.pv.values.map(v => `<li style="word-break:break-word">${q(String(v).slice(0, 300))}</li>`).join('')}</ol>` : '<div class="placeholder">No value: the crawl would leave this empty. Try the other selector or Rendered HTML.</div>');
+      return `<div class="field"><label>Picked</label><div class="mono" style="font-size:12px;word-break:break-all">&lt;${q(k.tag)}&gt; ${q(String(k.text || '').slice(0, 80))}</div></div>` +
+        `<div class="field"><label for="v2pkName">Name</label><input id="v2pkName" value="${q(P.name)}" oninput="V2pkSet('name', this.value)"></div>` +
+        `<div class="field"><label>Type</label><div class="seg" role="group"><button class="${P.type === 'css' ? 'on' : ''}" onclick="V2pkType('css')">CSS</button><button class="${P.type === 'xpath' ? 'on' : ''}" onclick="V2pkType('xpath')">XPath</button></div></div>` +
+        `<label class="opt"><input type="checkbox" ${P.all ? 'checked' : ''} onchange="V2pkAll(this.checked)"><span><b>Every element like this one</b><small>${num(k.similar || 0)} on this page (e.g. all prices of a list); off: this element only.</small></span></label>` +
+        `<div class="field"><label for="v2pkExpr">Expression</label><textarea id="v2pkExpr" rows="2" spellcheck="false" style="width:100%" oninput="V2pkSet('expr', this.value, true)">${q(P.expr)}</textarea></div>` +
+        `<div class="row2"><div class="field"><label>Extract</label><select onchange="V2pkSet('extract', this.value, true, true)">${[['text', 'Text'], ['inner_html', 'Inner HTML'], ['element', 'HTML element'], ['attribute', 'Attribute']].map(([v, l]) => opt(v, l, P.extract)).join('')}</select></div>` +
+        (P.extract === 'attribute' ? `<div class="field"><label>Attribute</label><select onchange="V2pkSet('attr', this.value, true)">${attrs.length ? attrs.map(a => opt(a, a, P.attr)).join('') : opt('', 'This element has no attributes', '')}</select></div>` : '') + '</div>' +
+        `<div id="v2pkPv">${pv}</div>` +
+        `<div class="btnrow"><button class="btn btn-xls" onclick="V2pkAdd()" ${cfgx.extractors.length >= MAXR ? `disabled title="At most ${MAXR} extractors"` : ''}>Add as a Custom Extraction rule</button></div>`;
+    }
+    const side = () => { const el = $('v2pkSide'); if (el) el.innerHTML = sideHtml(); };
+    window.V2pk = (k, v) => { P[k] = v; P.pick = null; P.pv = null; P.expr = ''; P.pvBusy = false; P.pvSeq++; clearTimeout(pvTimer); pickLoad(); };
+    async function pickLoad() {
+      const seq = ++P.loadSeq;
+      Object.assign(P, {html: null, reason: '', loading: true}); if (dlgOn('v2pick')) dlgRender();
+      if (!P.url) { Object.assign(P, {loading: false, reason: 'This crawl has no HTML page to pick from.'}); if (dlgOn('v2pick')) dlgRender(); return; }
+      try {
+        const d = await getJSON(`/api/crawl/source?u=${encodeURIComponent(P.url)}`);
+        if (seq !== P.loadSeq) return;
+        const h = P.source === 'rendered' ? d.rendered : d.original;
+        P.html = h || null;
+        P.reason = h ? '' : P.source === 'rendered' ? (d.rendered_reason || 'This page was not rendered in Chrome: pick from the Original HTML.') : (d.reason || 'The HTML of this page was not kept.');
+      } catch (e) { if (seq !== P.loadSeq) return; P.reason = e.message || 'Could not load the page.'; }
+      P.loading = false;
+      if (dlgOn('v2pick')) dlgRender();    // the wrapper below fills the frame
+    }
+    // any re-render of the dialog makes a new, empty frame: fill it again
+    const baseDlgRender = dlgRender;
+    dlgRender = function () {
+      baseDlgRender();
+      if (dlg.id === 'v2pick' && P.html) { const f = $('v2pkFrame'); if (f && !f.getAttribute('srcdoc')) frameLoad(); }
+    };
+    // the stored HTML without its scripts, refresh and frames, with a <base> so its images and styles load
+    function frameDoc(html, url) {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      let href = url;
+      try { const ob = doc.querySelector('base[href]'); if (ob) href = new URL(ob.getAttribute('href'), url).href; } catch (e) { href = url; }
+      if (!/^https?:/i.test(href)) href = url;
+      doc.querySelectorAll('script, iframe, frame, frameset, object, embed, base, meta[http-equiv], meta[name="referrer" i]').forEach(el => el.remove());
+      // the page's images and styles load from the site: without this they would tell it the dashboard's address
+      const rp = doc.createElement('meta'); rp.setAttribute('name', 'referrer'); rp.setAttribute('content', 'no-referrer'); doc.head.prepend(rp);
+      // inline handlers could not run in the sandbox either; without them Chrome logs no "blocked" message
+      doc.querySelectorAll('*').forEach(el => [...el.attributes].forEach(a => { if (/^on/i.test(a.name)) el.removeAttribute(a.name); }));
+      const base = doc.createElement('base'); base.setAttribute('href', href); doc.head.prepend(base);
+      // content that page builders keep hidden until their scripts animate it in (Elementor, AOS, WOW), and lazy images
+      doc.querySelectorAll('img[data-src], img[data-lazy-src], img[data-original], source[data-srcset], img[data-srcset]').forEach(el => {
+        const src = el.getAttribute('data-lazy-src') || el.getAttribute('data-src') || el.getAttribute('data-original');
+        if (src && (!el.getAttribute('src') || /^data:/i.test(el.getAttribute('src')))) el.setAttribute('src', src);
+        const set = el.getAttribute('data-srcset') || el.getAttribute('data-lazy-srcset');
+        if (set) el.setAttribute('srcset', set);
+      });
+      const st = doc.createElement('style');
+      st.textContent = '.elementor-invisible,.wow,[data-aos],.animated,.lazyload,.lazyloading{visibility:visible !important;opacity:1 !important;transform:none !important;animation:none !important}' +
+        '[data-axhover]{outline:2px dashed #1c7ed6 !important;outline-offset:1px;cursor:crosshair !important}[data-axpick]{outline:3px solid #e8590c !important;outline-offset:1px;background-color:rgba(232,89,12,.12) !important}';
+      doc.head.append(st);
+      return '<!doctype html>' + doc.documentElement.outerHTML;
+    }
+    // the clicks are wired as soon as the copy is parsed: onload would wait for every image and font of the page
+    function frameLoad() {
+      const f = $('v2pkFrame'); if (!f) return;
+      const wire = () => {
+        const doc = f.contentDocument;
+        if (!doc || doc.URL !== 'about:srcdoc' || doc.readyState === 'loading' || doc.__axWired) return !!(doc && doc.__axWired);
+        doc.__axWired = true;
+        let hover = null;
+        doc.addEventListener('mouseover', e => { if (hover) hover.removeAttribute('data-axhover'); hover = e.target.nodeType === 1 ? e.target : null; if (hover) hover.setAttribute('data-axhover', ''); }, true);
+        doc.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); if (e.target.nodeType === 1) pickEl(e.target); }, true);
+        doc.addEventListener('submit', e => e.preventDefault(), true);
+        doc.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') e.preventDefault(); }, true);   // no link or form opens
+        return true;
+      };
+      f.onload = wire;
+      f.srcdoc = frameDoc(P.html, P.url);
+      let tries = 0;
+      const poll = () => { if (!wire() && ++tries < 200 && document.body.contains(f)) setTimeout(poll, 50); };
+      setTimeout(poll, 30);
+    }
+    // ---- selectors. The DOM is read through the browser's own getters (a crawled page cannot clobber parentElement,
+    // id or tagName with a named form field), the walk is capped, and tbody is skipped unless the HTML has it (browsers
+    // add it, the crawl's parser does not) ----
+    const getter = (proto, k) => Object.getOwnPropertyDescriptor(proto, k).get;
+    const gParent = getter(Node.prototype, 'parentElement'), gType = getter(Node.prototype, 'nodeType'), gTag = getter(Element.prototype, 'tagName'),
+          gId = getter(Element.prototype, 'id'), gCls = getter(Element.prototype, 'classList'), gKids = getter(Element.prototype, 'children');
+    const up = n => gParent.call(n), tagOf = n => String(gTag.call(n) || '').toLowerCase();
+    const isEl = n => !!n && gType.call(n) === 1;
+    const okId = id => /^[A-Za-z][\w-]*$/.test(id || '');
+    const okCls = c => /^[A-Za-z_][\w-]*$/.test(c) && !/^(active|current|open|show|hover|focus|selected|is-|has-|js-|ng-|v-)/.test(c);
+    const classesOf = n => [...gCls.call(n)].filter(okCls).slice(0, 2);
+    const sameTag = n => { const p = up(n); return p ? [...gKids.call(p)].filter(s => gTag.call(s) === gTag.call(n)) : [n]; };
+    const skipTbody = () => !/<tbody[\s>]/i.test(P.html || '');
+    const uniqueId = (doc, n) => { const id = gId.call(n); return okId(id) && doc.querySelectorAll('#' + CSS.escape(id)).length === 1 ? id : ''; };
+    function cssFor(el, all) {
+      const doc = el.ownerDocument, parts = [], skip = skipTbody();
+      for (let n = el, depth = 0; isEl(n) && tagOf(n) !== 'html' && depth < 120; n = up(n), depth++) {
+        const tag = tagOf(n), id = uniqueId(doc, n);
+        if (id) { parts.unshift({s: '#' + CSS.escape(id)}); break; }
+        if (tag === 'tbody' && skip) { parts.unshift({gap: true}); continue; }
+        let s = tag + classesOf(n).map(c => '.' + CSS.escape(c)).join('');
+        const sib = sameTag(n);
+        if (sib.length > 1 && !all) s += `:nth-of-type(${sib.indexOf(n) + 1})`;   // all: the same path at any position
+        parts.unshift({s});
+      }
+      const join = L => L.reduce((acc, p, i) => p.gap ? acc : acc + (acc ? (L[i - 1] && L[i - 1].gap ? ' ' : ' > ') : '') + p.s, '');
+      const full = join(parts);
+      if (!full) return '';
+      // the shortest tail of the path that still finds the same elements
+      const want = [...doc.querySelectorAll(full)];
+      for (let i = parts.length - 1; i > 0; i--) {
+        if (parts[i].gap) continue;
+        const s = join(parts.slice(i));
+        try { const got = [...doc.querySelectorAll(s)]; if (got.length === want.length && got.every((g, j) => g === want[j])) return s; } catch (e) { /* keep going */ }
+      }
+      return full;
+    }
+    const xq = v => v.includes('"') ? `'${v}'` : `"${v}"`;
+    // all: no positions, and the same classes as the CSS selector, so both find the same elements
+    function xpathFor(el, all) {
+      const doc = el.ownerDocument, segs = [], skip = skipTbody();
+      const cls = n => all ? classesOf(n).map(c => `[contains(concat(' ', normalize-space(@class), ' '), ' ${c} ')]`).join('') : '';
+      for (let n = el, depth = 0; isEl(n) && depth < 120; n = up(n), depth++) {
+        const tag = tagOf(n), id = uniqueId(doc, n);
+        if (id) return `//*[@id=${xq(id)}]` + (segs.length ? '/' + segs.join('/').replace(/\/{3,}/g, '//') : '');
+        if (tag === 'tbody' && skip) { segs.unshift(''); continue; }
+        const sib = sameTag(n);
+        segs.unshift(tag + cls(n) + (sib.length > 1 && !all ? `[${sib.indexOf(n) + 1}]` : ''));
+      }
+      return ('/' + segs.join('/')).replace(/\/{3,}/g, '//');
+    }
+    function pickEl(el) {
+      if (!isEl(el) || ['html', 'body', 'head'].includes(tagOf(el))) return;   // a click on the empty page
+      const doc = el.ownerDocument;
+      doc.querySelectorAll('[data-axpick]').forEach(x => x.removeAttribute('data-axpick'));
+      el.setAttribute('data-axpick', '');
+      const attrs = [...el.attributes].map(a => a.name).filter(a => !a.startsWith('data-ax'));
+      let similar = 0; try { similar = doc.querySelectorAll(cssFor(el, true)).length; } catch (e) { similar = 0; }
+      const tag = tagOf(el);
+      P.pick = {el, tag, text: (el.textContent || '').replace(/\s+/g, ' ').trim(), attrs, similar};
+      if (!P.name) P.name = (tag === 'img' ? 'Image' : tag) + ' value';
+      P.attr = attrs.includes('href') ? 'href' : attrs.includes('src') ? 'src' : attrs.includes('content') ? 'content' : (attrs[0] || '');
+      const media = tag === 'img' || tag === 'meta';
+      if (media) P.extract = 'attribute';
+      else if (P.autoAttr && P.extract === 'attribute') P.extract = 'text';     // set by an image pick, not by you
+      P.autoAttr = media;
+      exprFromPick(); side(); preview();
+    }
+    function exprFromPick() { if (P.pick) P.expr = P.type === 'xpath' ? xpathFor(P.pick.el, P.all) : cssFor(P.pick.el, P.all); }
+    window.V2pkType = t => { P.type = t; exprFromPick(); side(); preview(); };
+    window.V2pkAll = on => { P.all = on; exprFromPick(); side(); preview(); };
+    let pvTimer = null;
+    window.V2pkSet = (k, v, check, redraw) => {
+      P[k] = v;
+      if (redraw) side();
+      if (check) { clearTimeout(pvTimer); pvTimer = setTimeout(preview, 350); }
+    };
+    function rule() { return {name: (P.name || '').trim() || 'Picked value', type: P.type, expr: P.expr.trim(), extract: P.extract, attr: P.extract === 'attribute' ? P.attr : '', source: 'html', case_sensitive: true}; }
+    async function preview() {
+      const r = rule(); if (!r.expr) { P.pv = null; return; }
+      const seq = ++P.pvSeq;
+      P.pvBusy = true; const pvEl = $('v2pkPv'); if (pvEl) pvEl.innerHTML = '<div class="hint">Checking with the crawl’s extractor…</div>';
+      try {
+        const d = await sendJSON('/api/crawl/extract-preview', {url: P.url, source: P.source, extractors: [r]});
+        if (seq !== P.pvSeq) return;
+        const name = Object.keys(d.extraction || {})[0];
+        P.pv = {values: name ? d.extraction[name] : [], count: name ? (d.counts || {})[name] || 0 : 0, problems: d.problems || [], reason: d.reason || ''};
+      } catch (e) { if (seq !== P.pvSeq) return; P.pv = {err: e.message || 'The preview failed.'}; }
+      P.pvBusy = false;
+      const el = $('v2pkPv');
+      if (el) { const keep = $('v2pkSide'); if (keep) { const a = document.activeElement, id = a && a.id, s = a && a.selectionStart; side(); const f = id && $(id); if (f) { f.focus(); try { f.setSelectionRange(s, s); } catch (x) { /* select */ } } } }
+    }
+    window.V2pkAdd = () => {
+      const r = rule();
+      if (!r.expr) return;
+      if (cfgx.extractors.length >= MAXR) { toast(`At most ${MAXR} extractors.`, 'warn', 4000); return; }
+      cfgx.extractors.push(r); saveCfgx(); renderRules('extractors'); updateOptSummary();
+      toast(`Added the extractor “${q(r.name)}”: it runs on every page of the next crawl.`, 'info', 5000);
+      P.pick = null; P.pv = null; P.name = ''; P.expr = ''; side();
+    };
   })();
   </script>
 </body>

@@ -1254,6 +1254,9 @@ def _overview(va: _View, vb: _View) -> List[dict]:
     keys = list(OrderedDict.fromkeys(list(vb.counts) + list(va.counts) + vb.member_keys + va.member_keys))
     hidden = _hidden_tabs()
     differs = not_comparable(va.settings, vb.settings, keys)
+    # a snapshot records every filter of every tab (0 included): a filter one crawl lacks did not exist when it was
+    # saved (an older version, a tab that was off), so that side is "Not checked", never 0
+    has_a, has_b = set(va.counts) | set(va.member_keys), set(vb.counts) | set(vb.member_keys)
     out = []
     for key in keys:
         if key.partition(":")[0] in hidden:
@@ -1280,13 +1283,21 @@ def _overview(va: _View, vb: _View) -> List[dict]:
             nums = {k: None for k in BUCKETS}
             reconciled = None
             change = cur - prev
+        check_a, check_b = va.checks.get(key, ""), vb.checks.get(key, "")
+        if key not in has_a or key not in has_b:
+            nums = {k: None for k in BUCKETS}
+            reconciled, change, bk = None, None, None
+            if key not in has_a:
+                prev, rows_a, check_a = None, None, "not_checked"
+            if key not in has_b:
+                cur, rows_b, check_b = None, None, "not_checked"
         tab_id, _, fid = key.partition(":")
         out.append(dict({"key": key, "tab": tab_id, "filter": fid, "tab_name": tab_name, "filter_name": filter_name,
                          "issue_type": issue_type, "priority": priority, "current": cur, "previous": prev,
                          "change": change, "change_pct": _pct(change, prev) if change is not None else None,
                          "rows_current": rows_b, "rows_previous": rows_a, "exact": bk is not None,
                          "reconciled": reconciled, "comparable": not why, "not_comparable": why,
-                         "check_current": vb.checks.get(key, ""), "check_previous": va.checks.get(key, "")},
+                         "check_current": check_b, "check_previous": check_a},
                         **nums))
     return out
 

@@ -4079,7 +4079,12 @@ def _business_cached(url: str) -> Optional[dict]:
             data = json.load(f)
     except (OSError, ValueError):
         return None
-    return data if isinstance(data, dict) and isinstance(data.get("report"), dict) else None
+    if not (isinstance(data, dict) and isinstance(data.get("report"), dict)):
+        return None
+    snap = data["report"].get("seo_snapshot")
+    if isinstance(snap, dict) and snap.get("health_score") == "":    # saved before the fix above: '' = not checked
+        snap["health_score"] = None
+    return data
 
 def _business_save(url: str, report: dict) -> str:
     """Saves the finished report as this site's last one; returns its created_at ('' when it could not be saved)."""
@@ -4089,7 +4094,8 @@ def _business_save(url: str, report: dict) -> str:
         path = _business_cache_path(url)
         tmp = f"{path}.{uuid.uuid4().hex[:6]}.tmp"
         with open(tmp, "w", encoding="utf-8") as f:
-            json.dump({"url": url, "key": _business_key(url), "created_at": created, "report": json_value(report)}, f)
+            # _json_copy keeps None (json_value is for grid cells and writes '' for it)
+            json.dump({"url": url, "key": _business_key(url), "created_at": created, "report": _json_copy(report)}, f)
         with _business_cache_lock:
             os.replace(tmp, path)
         return created
@@ -4516,11 +4522,12 @@ def list_dismissed(site: str = ""):
 GRAPH_TYPES = ("force", "crawl_tree", "dir_tree")
 
 @app.get("/api/crawl/graph")
-def crawl_graph(limit: int = 500, type: str = "force"):
+def crawl_graph(limit: int = 500, type: str = "force", metrics: int = 0):
     """Visualisations. type=force (default): the site graph - page nodes (size = Link Score, colour = HTTP
     status category) and internal link edges, above `limit` nodes the smaller pages grouped by folder.
     type=crawl_tree: every crawled URL under the page it was first found on (its parent link), depth by
-    depth. type=dir_tree: URL folders with their URL counts and the worst status inside."""
+    depth (metrics=1 adds Link Score, unique inlinks, response time and word count per node, null = not
+    checked). type=dir_tree: URL folders with their URL counts and the worst status inside."""
     from crawler.seo.graph import build_graph
     kind = (type or "force").strip().lower()
     if kind not in GRAPH_TYPES:
@@ -4530,7 +4537,7 @@ def crawl_graph(limit: int = 500, type: str = "force"):
     if kind == "crawl_tree":
         if site is None:
             return {"type": kind, "nodes": [], "total": 0, "shown": 0, "root": ""}
-        return _memo(job, ("crawl_tree", id(index), int(limit or 0)), lambda: _crawl_tree(site, limit))
+        return _memo(job, ("crawl_tree", id(index), int(limit or 0), bool(metrics)), lambda: _crawl_tree(site, limit, bool(metrics)))
     if kind == "dir_tree":
         if site is None:
             return {"type": kind, "total": 0, "tree": [], "depth": []}
@@ -4605,11 +4612,12 @@ def crawl_graph_tree_search(q: str = "", limit: int = 200, files: bool = False):
 
 CRAWL_TREE_MAX = 20_000
 
-def _crawl_tree(site, limit: int = 0) -> dict:
+def _crawl_tree(site, limit: int = 0, metrics: bool = False) -> dict:
     """Crawl Tree Graph: one node per internal URL with its parent (the page it was first found on, as the
     Parent link column shows it; the shortest-depth crawled page linking to it otherwise), crawl depth,
     status category and indexability. Nodes beyond `limit` (default CRAWL_TREE_MAX), deepest first, are
-    left out and counted."""
+    left out and counted. metrics: the tree graph's Colour by / Size by values of the Internal tab (U12), None
+    when a value was not checked (a skipped Link Score step, a file without words), never 0 for missing."""
     # page-like URLs only (images, scripts and PDFs are files of a page, not branches of the crawl)
     rows = [r for r in site.results if getattr(r, "url", "") and getattr(r, "resource_type", "page") == "page"]
     by_url = {r.url: r for r in rows}
@@ -4635,6 +4643,18 @@ def _crawl_tree(site, limit: int = 0) -> dict:
                       "status_code": row_status_code(r), "category": row_category(r),
                       "indexable": bool((getattr(site, "indexable", None) or {}).get(r.url, False)),
                       "title": (getattr(r, "page_title", "") or "")[:120]})
+    if metrics:
+        from crawler.seo.registry import seo as _seo
+        from crawler.seo.tabs.internal import is_html_doc, response_time_s, unique_inlinks_count
+        scores = getattr(site, "link_score", None) or {}
+        for n in nodes:
+            r = by_url[n["id"]]
+            html = is_html_doc(r)
+            rt = response_time_s(r)
+            n["metrics"] = {"link_score": scores.get(r.url) if scores else None,
+                            "unique_inlinks": unique_inlinks_count(site, r),
+                            "response_time": rt if rt != "" else None,
+                            "word_count": (_seo(r).get("word_count") or 0) if html else None}
     # a parent that would make a cycle (redirect loops) is cut
     ids = {n["id"]: n for n in nodes}
     for n in nodes:
@@ -5235,15 +5255,35 @@ def list_reports():
     return reports.catalog(index)
 
 @app.get("/api/crawl/report/{report_id}")
-def download_report(report_id: str, format: str = "xlsx"):
+def download_report(report_id: str, format: str = "xlsx", a: str = "", b: str = "", elements: str = "",
+                    req: str = ""):
     """One report of the Reports menu (Crawl Overview, Redirect Chains, Orphan Pages, SERP Summary, ...) as
-    XLSX or CSV (a .zip when it has several tables)."""
+    XLSX or CSV (a .zip when it has several tables). Comparison Overview: req = the comparison of Mode > Compare as
+    JSON ({a, b, url_map, change_detection, thresholds}, as POST /api/crawl/compare), or a / b ("current" = the crawl
+    on screen) and elements (U10). Two saved crawls need no crawl on screen."""
     fmt = _fmt(format)
-    job, site, index = _need_index()
     from crawler import reports
+    spec: Optional[Dict[str, Any]] = None
+    if report_id == "compare_overview" and (a.strip() or req.strip()):
+        if req.strip():
+            try:
+                spec = CompareRequest(**json.loads(req)).model_dump()
+            except Exception:
+                _bad("req is not a valid comparison (JSON with a, b, url_map, change_detection, thresholds).")
+        else:
+            spec = {"a": a, "b": b or "current", "change_detection": [e for e in elements.split(",") if e.strip()] or None}
+        spec["a"], spec["b"] = str(spec.get("a") or "").strip(), str(spec.get("b") or "current").strip()
+        if "current" not in (spec["a"].lower(), spec["b"].lower()):
+            from crawler.reports import _BUILDERS, tables_bytes, safe_name
+            tables = _BUILDERS["compare_overview"](None, None, None, {"compare": spec, "reports_dir": REPORTS_DIR})
+            return _download(*tables_bytes(tables, fmt, safe_name("comparison_overview")))
+    job, site, index = _need_index()
+    ctx = _report_ctx(job, site, index)
+    if spec is not None:
+        ctx["compare"] = spec
+        ctx["reports_dir"] = REPORTS_DIR
     try:
-        name, data, mime = reports.build_report(report_id, site, index, job.crawler, fmt=fmt,
-                                                **_report_ctx(job, site, index))
+        name, data, mime = reports.build_report(report_id, site, index, job.crawler, fmt=fmt, **ctx)
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Unknown report: {report_id}")
     return _download(name, data, mime)

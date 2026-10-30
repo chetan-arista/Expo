@@ -178,8 +178,19 @@ class Chips(Flowable):
                 c.linkURL(link, (x, y, x + w, y + self.chip_h), relative=1)
 
 
+def _score(v) -> Optional[int]:
+    """The health score as a number, None when there is none (a report saved before 2.0 holds '' there)."""
+    if v is None or isinstance(v, bool):
+        return None
+    try:
+        return int(float(v))
+    except (TypeError, ValueError):
+        return None
+
+
 def _ring(score: Optional[int], size: float = 31 * mm) -> Drawing:
     """Health score donut (grey with "Not checked" when there was no crawl)."""
+    score = _score(score)
     regular, bold = _fonts()
     d = Drawing(size, size)
     cx = cy = size / 2
@@ -428,7 +439,7 @@ def _tech(rep: dict, page_w: float, s: dict) -> List:
 
 def _seo(rep: dict, page_w: float, s: dict) -> List:
     snap = rep.get("seo_snapshot") or {}
-    score = snap.get("health_score")
+    score = _score(snap.get("health_score"))
     ring_w = 38 * mm
     checked = snap.get("checked", "crawl" if score is not None else "none")
     pages = snap.get("pages") or 0

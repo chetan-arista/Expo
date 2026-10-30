@@ -1383,8 +1383,8 @@ tests, and `INTEGRATIONS_BACKOFF_BASE` shortens the back-off).
 
 ## 25. ARACHNIX 2.0 (in development)
 
-Everything in this section is built and tested on the server; the screens marked **(dashboard)** are in the 2.0
-dashboard. With every new option at its default, a crawl gives exactly the same results as in 1.0.
+Everything in this section is built and tested, and switched on by default (`ARACHNIX_V2_FEATURES=0` hides the
+new tabs again). With every new option at its default, a crawl gives the same results as in 1.0, plus the new tabs.
 
 ### 25.1 Where to find it (dashboard)
 
@@ -1396,7 +1396,18 @@ dashboard. With every new option at its default, a crawl gives exactly the same 
 | Help > **Ask ARACHNIX** | A chat about the crawl on screen. It calls ARACHNIX's own tools; anything that changes something (start or stop a crawl, build a report) waits for your Allow. 20 questions per person per hour. Needs the free AI layer (section 20). |
 | Help > **Site trend history** | Every saved crawl of the site: URLs per status class (they add up), indexable pages, issues by type, health score. A crawl saved without a snapshot is a gap, never 0. |
 | Help > **Browser extension** | Download the ARACHNIX Companion for Chrome / Edge and the install steps. It hands your signed-in session for one site to the next crawl (10 minutes, used once, that site only). |
+| Configuration > **AI prompts** | Your own AI questions for every page (7 presets or your own); Run fills the AI tab. A signed-in crawl is never sent to a free cloud AI. |
+| Configuration > **Log files (server logs)** | Upload an access log (Apache / Nginx / IIS, .gz, up to 200 MB): Googlebot, Bingbot and AI bot hits per URL, fake bots, Log Orphans. Counts only, the file is deleted after reading. |
+| Configuration > **SEO tools** | Semantic search, n-grams of a page, topic clusters, segment tester, profile compare, Google Sheets export of the tab on screen, JavaScript snippet library. |
+| File > **Scheduling** | New: API data fetched and waited for before the exports; List-mode tasks can read their list from an XML sitemap or a Google Sheet at every run. |
 | Lower pane | New tabs for the selected URL: Structured Data Details, Accessibility Details, Spelling & Grammar (with "Add to dictionary"), Carbon, PDF Details. A section that did not run says why. |
+| Lower pane > **SERP Snippet** | Desktop, Tablet and Mobile previews, and a box to try your own title and description (re-measured as you type, not saved). Tablet and mobile are estimates. |
+| Lower pane > **View Source** | **Line diff**: the lines JavaScript added or removed (original against rendered HTML), when the page was rendered in Chrome. |
+| Configuration > **Custom Search** | Search in HTML, page text, head, body, page text without links or one element (CSS or XPath); **Bulk add** (one search per line: the text, or a name and the text separated by ` \| ` or a tab). |
+| Configuration > **Custom Extraction** | **Pick from a page…**: the crawled page without its scripts (an iframe sandboxed without `allow-scripts`); click a value to get its CSS selector and XPath, "every element like this one", and a preview made by the crawl's own extractor. Regex extractors: read the HTML or the page text, match case or not. |
+| Configuration > **Custom JavaScript** | Add a ready snippet from the library. |
+| Mode > **Compare** | Download the comparison report (Excel), submit the new and changed URLs to IndexNow (a dry run says how many and which engines first), five more change checks (unique inlinks, internal and external outlinks and their unique counts) and the reason a check is "Not comparable". |
+| Visualisations > **Crawl / Directory Tree Graph** | **Colour by** and **Size by**: crawl depth, indexability, Link Score, unique inlinks, response time, word count (folders: URLs, indexable share). The shape stays the status; the legend's counts add up to the URLs (or folders) of the tree, a missing value is "Not checked". |
 
 ### 25.2 New checks and data
 
@@ -1429,6 +1440,9 @@ dashboard. With every new option at its default, a crawl gives exactly the same 
 | Logs | `POST /api/logs/upload` (body = the log file, at most 200 MB), `GET /api/logs/status`, `DELETE /api/logs` (Log Files tab: 2.0 switch) |
 | Scheduling | `GET /api/schedules/{id}/runs/{run}/files[/{name}]`, `GET /api/schedules/{id}/command` |
 | Other | `GET /api/crawls/trend`, `POST /api/crawl/segments/test`, `POST /api/profiles/compare`, `POST /api/robots/test`, `GET /api/custom-js/snippets`; `GET /api/crawl/url` adds `sections`, link `rel` / `type`, `other_inlinks`; `/api/crawl/export/detail?part=<section>` |
+| Custom rules | `POST /api/crawl/extract-preview` (`{url, source: original \| rendered, extractors, searches}`: the rules' values on one crawled page, by the crawl's own code on the stored HTML, logins masked) |
+| Visualisations | `GET /api/crawl/graph?type=crawl_tree&metrics=1` adds `metrics` (Link Score, unique inlinks, response time, word count; `null` = not checked) to every node; without `metrics` the answer is as in 1.0 |
+| Reports | `GET /api/crawl/report/compare_overview?a=<crawl>&b=<crawl or current>&elements=<checks>` (the Comparison Overview of the two crawls of Mode > Compare) |
 
 Crawl start (`POST /api/crawl/start`) accepts every new option (PLAN4 10.7: `preferences`, `follow`, `crawl_types`,
 `limits`, `cookie_storage`, `assume_html`, `ignore_non_indexable_issues`, `carbon`, `a11y_audit`, `max_redirects`,

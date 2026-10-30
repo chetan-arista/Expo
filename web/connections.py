@@ -264,7 +264,8 @@ async def indexnow_submit(request: Request):
         compare_urls = None
         if source == "compare":
             compare_urls = indexnow.compare_candidates(b.get("a") or "", b.get("b") or "current", _A().REPORTS_DIR,
-                                                       current=_A()._current_snapshot("current", ""))
+                                                       current=_A()._current_snapshot("current", ""),
+                                                       url_map=b.get("url_map") or None)   # the comparison on screen
         urls = indexnow.candidates(crawler, source, tab=str(b.get("tab") or ""), filters=b.get("filters") or None,
                                    urls=b.get("urls") or None, compare_urls=compare_urls)
         return indexnow.submit(crawler, urls, dry_run=b.get("dry_run") is not False, source=source)

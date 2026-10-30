@@ -31,10 +31,12 @@ Server side, built and tested (each with its own acceptance test; the 1.0 regres
 
 | P22 Log files | Upload a server access log (Combined, Common, W3C / IIS, .gz; up to 200 MB, streamed, deleted after reading): Googlebot, Bingbot and AI bot hits per URL, fake bots told apart by reverse DNS, bot 4xx / 5xx, pages Googlebot never requested, URLs bots request that the crawl never found (Log Orphans), hits per bot. Counts only: no line or IP address is kept. Hidden in 1.0 with the other 2.0 tabs (`ARACHNIX_V2_FEATURES`) until its upload screen is in the dashboard. |
 
-Still open: the scheduler's "fetch Google data first" step and sitemap / Google Sheet start lists (W8), the Log Files upload screen, and the smaller screens U4 (AI tab
-prompt manager), U9 (point-and-click extractor), U10 (Compare additions), U12 (tree graph metric picker) and U13 (SERP
-preview for mobile, View Source diff, n-grams pane). The features of section 1 stay hidden (`ARACHNIX_V2_FEATURES`)
-until their screens are done. Documentation: DOCUMENTATION.md section 25.
+Done since (2026-10-29 / 30): the scheduler's API data step and sitemap / Google Sheet start lists (W8), the Log Files
+upload screen, U4 (AI prompts), U9 (point-and-click extractor, Bulk add, Search in head / body / one element, regex
+options, snippet library), U10 (comparison report, IndexNow, five more change checks), U12 (Colour by / Size by on the
+tree graphs) and U13 (SERP preview for tablet and mobile with your own text, View Source line diff; n-grams are in
+Configuration > SEO tools). The 2.0 features are on by default (`ARACHNIX_V2_FEATURES=0` hides them).
+Still open: the 2.0 chapter of the User Guide PDF. Documentation: DOCUMENTATION.md section 25.
 
 ---
 
@@ -109,11 +111,11 @@ These are in the code today and hidden by one switch (`ARACHNIX_V2_FEATURES=1`, 
 | U6 | Accessibility and Lighthouse panes |
 | U7 | Structured Data details pane |
 | U8 | More configuration: preferences, robots.txt editor and tester, limits, per-type options, carbon options |
-| U9 | Point-and-click extractor and the snippet library |
-| U10 | More change-detection checks in Compare |
+| U9 | Point-and-click extractor and the snippet library (done 2026-10-30) |
+| U10 | More change-detection checks in Compare (done 2026-10-30) |
 | U11 | Trend history charts per site |
-| U12 | Metric picker for the tree graphs |
-| U13 | SERP preview for mobile, content map and n-gram views in the lower and right panes |
+| U12 | Metric picker for the tree graphs (done 2026-10-30) |
+| U13 | SERP preview for mobile, content map and n-gram views in the lower and right panes (done 2026-10-30: SERP devices, View Source diff; n-grams in SEO tools) |
 | U14 | Smaller flows: segment tester, profile compare, scheduler steps, ticket buttons, Sheets export, log upload, browser extension help |
 
 ## 6. Polish found while testing 1.0
