@@ -1,0 +1,49 @@
+# Keeps the Docker build context small and free of secrets. The image needs only: requirements.txt,
+# run.py, cli.py, crawler/ and web/ (web/static/index.html is the dashboard the backend serves).
+
+# Version control and editor / agent folders
+.git
+.gitignore
+.vercel
+.vscode
+.idea
+.claude
+
+# Local Python environments and caches
+venv
+.venv
+env
+__pycache__
+**/__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.mypy_cache
+
+# Research material, local reports and crawl output (never baked into the image)
+research
+reports
+*.xlsx
+*.pdf
+*.log
+crawl_*
+
+# Secrets that might sit in the folder locally (keys belong in Render's environment settings)
+.env
+.env.*
+*.pem
+*.key
+
+# Not used by the backend: Vercel frontend copy, Vercel serverless entry, deploy files, dev tools, docs
+frontend
+api
+index.html
+config.js
+vercel.json
+.vercelignore
+render.yaml
+Dockerfile
+.dockerignore
+tools
+*.md
+!THIRD_PARTY_NOTICES.md

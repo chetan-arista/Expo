@@ -1,10 +1,107 @@
+# Render Blueprint: the ARACHNIX backend (FastAPI + headless Chromium), built from ./Dockerfile.
+# Step-by-step instructions, checks and troubleshooting: DEPLOY.md, section 2.
 services:
   - type: web
     name: website-crawler-backend
-    runtime: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn web.app:app --host 0.0.0.0 --port $PORT
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # Chromium (password logins, the live login window, JavaScript rendering, screenshots) needs at least
+    # 1 GB of memory next to the app. 1c-2g is the "Standard" instance (1 CPU, 2 GB RAM).
+    # The free and 0.5c-512mb ("Starter") instances have 512 MB and run out of memory once Chrome starts;
+    # on those set MAX_CHROME_INSTANCES=1 and CRAWLER_NO_CHROME=1 (no browser logins or screenshots).
+    # The free instance also sleeps when idle, so scheduled crawls would not run on time (DEPLOY.md, 2.8).
+    # Crawl size: the server keeps every crawled URL in memory. CRAWLER_MAX_URLS below caps one crawl at a size
+    # that fits 1c-2g (about 800 on 512 MB, 6,000 on 2c-4g; DEPLOY.md, section 2.1), and the memory guard
+    # (CRAWLER_MIN_FREE_MB, default 400) stops queuing new URLs before the server runs out of memory.
+    plan: 1c-2g
+    # Exactly one instance: crawl jobs and results live in the server's memory, and the scheduler runs in one process.
+    numInstances: 1
     healthCheckPath: /healthz
+    autoDeployTrigger: commit
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.9
+      # sync: false = Render asks for the value when the Blueprint is first created (leave empty to skip);
+      # add or change values later under the service's Environment tab. Never write a secret into this file.
+
+      # --- Free AI keys: all optional. Without any key the app runs with "AI off - site facts only". ---
+      - key: GEMINI_API_KEY          # Google AI Studio free tier (secret)
+        sync: false
+      - key: GROQ_API_KEY            # Groq free tier (secret)
+        sync: false
+      - key: OPENROUTER_API_KEY      # OpenRouter ":free" models, very low daily limits (secret)
+        sync: false
+      - key: CRAWLER_AI_PROVIDER     # auto = first provider with a key: gemini, groq, openrouter; or "off"
+        value: auto
+      - key: CRAWLER_AI_ALLOW_PRIVATE  # 0 = text from signed-in crawls is never sent to a free cloud AI
+        value: "0"
+
+      # --- Access (DEPLOY.md, 2.3) ---
+      # Team access key: strongly recommended on any public deployment. Without it anyone who finds the
+      # address can run crawls and download the reports. Every /api/* request then needs it (the dashboard
+      # asks once); /healthz stays open. A long random value, e.g. from
+      #   python -c "import secrets; print(secrets.token_urlsafe(32))"
+      - key: CRAWLER_ACCESS_KEY      # (secret)
+        sync: false
+      # Websites allowed to call this backend from the browser, comma-separated, no slash at the end, e.g.
+      #   https://website-crawler-virid.vercel.app
+      # Leave empty to allow every website (as before). Opening the Render address itself always works.
+      - key: CRAWLER_CORS_ORIGINS
+        sync: false
+
+      # --- Google Search Console, GA4 and PageSpeed Insights: optional (DEPLOY.md, 2.6) ---
+      # A Google Cloud OAuth client (Web application) with the authorised redirect URI
+      #   https://<this service's address>/api/integrations/google/callback
+      # Without it the API Access dialog shows these set-up steps; the tabs say "Not connected", never 0.
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET  # (secret)
+        sync: false
+      - key: PSI_API_KEY             # free Google API key with the PageSpeed Insights API enabled (secret)
+        sync: false
+
+      # --- Email notifications: optional (DEPLOY.md, 2.7). Used while File > Settings > Notifications has no
+      # SMTP host of its own; recipients and "Email on Crawl Complete" are set in that dialog. ---
+      - key: CRAWLER_SMTP_HOST       # e.g. smtp.office365.com or smtp.gmail.com; empty = no email
+        sync: false
+      - key: CRAWLER_SMTP_PORT       # 587 with TLS (STARTTLS), 465 with SSL
+        value: "587"
+      - key: CRAWLER_SMTP_ENCRYPTION # tls | ssl | none
+        value: tls
+      - key: CRAWLER_SMTP_USER       # the mailbox that sends
+        sync: false
+      - key: CRAWLER_SMTP_PASSWORD   # its password or app password (secret)
+        sync: false
+      - key: CRAWLER_SMTP_FROM       # the sender address
+        sync: false
+      - key: CRAWLER_DASHBOARD_URL   # the dashboard link put in emails, e.g. the Vercel address
+        sync: false
+
+      # --- Server ---
+      - key: CRAWLER_REPORT_RETENTION_HOURS  # Excel/PDF files and screenshots of the current crawl are deleted after this
+        value: "72"
+      - key: MAX_CHROME_INSTANCES    # Chromes at once: 2 on 1c-2g (crawl + live login window), 1 on 512 MB
+        value: "2"
+      - key: CRAWLER_MAX_URLS        # URLs one crawl may queue on this server: 2500 on 1c-2g, 800 on 512 MB, 6000 on 2c-4g
+        value: "2500"
+      - key: CRAWLER_REPORTS_DIR     # saved crawls, history, schedules, settings, profiles, segments, dismissed issues,
+        value: /var/data             # Google connections: keep it on the disk below
+
+      # --- ARACHNIX 2.0: AI agents (MCP at /mcp) and Ask ARACHNIX; connections are set up in the dashboard ---
+      # MCP is off until an admin turns it on (Connections > AI agents) and agents use their own tokens, never the
+      # team access key. Crawls agents start never open cloud-metadata addresses (on Render every crawl has that rule).
+      - key: CRAWLER_MCP_ALLOWED_HOSTS   # extra Host names /mcp answers to (comma-separated); Render's own
+        sync: false                      # *.onrender.com address is allowed already
+      - key: CRAWLER_AI_ASSISTANT_CALLS  # Ask ARACHNIX: AI calls per hour for the whole server
+        value: "30"
+      # The stdio bridge (python arachnix_bridge.py on a teammate's PC) reads ARACHNIX_URL and ARACHNIX_MCP_TOKEN
+      # from ITS OWN environment: they are never set on this server.
+
+    # Strongly recommended: keep saved crawls (File > Crawls), crawl history, scheduled tasks, settings, profiles,
+    # segments, dismissed issues and Google connections across deploys and restarts. Without a disk they are lost at
+    # every deploy. Paid instances only; a service with a disk cannot run more than one instance and loses
+    # zero-downtime deploys (a few seconds of downtime per deploy).
+    # Uncomment, then sync the Blueprint:
+    # disk:
+    #   name: crawler-data
+    #   mountPath: /var/data
+    #   sizeGB: 1

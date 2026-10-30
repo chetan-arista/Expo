@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ARACHNIX Companion</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body class="popup">
+  <header class="top">
+    <div class="brand"><img src="icons/mark.svg" alt=""><span>Slick<span class="up">UP</span> <small>Companion</small></span></div>
+    <button id="optBtn" class="btn btn-sm" type="button">Options</button>
+  </header>
+
+  <section class="card site" aria-labelledby="pageHost">
+    <div class="pagehead">
+      <span id="pageHost" class="host">Reading the page...</span>
+      <span id="pagePath" class="path muted"></span>
+    </div>
+    <div id="summary" class="summary" aria-live="polite"></div>
+    <div id="noServer" class="msg info hidden"><div class="grow">Connect your ARACHNIX server to audit sites and
+      hand over a signed-in session. <button id="setupBtn" class="btn-link" type="button">Set up</button></div></div>
+    <div class="actrow">
+      <button id="auditBtn" class="btn btn-go" type="button" disabled
+        title="Opens ARACHNIX with this site filled in. You press Start there.">Audit this site in ARACHNIX</button>
+      <button id="sessionBtn" class="btn" type="button" disabled
+        title="Asks the browser for one-time access to this site's cookies and hands them to your ARACHNIX server, so it can crawl the signed-in pages.">Use my session in ARACHNIX</button>
+    </div>
+    <p id="serverLine" class="serverline muted hidden"></p>
+    <div id="sessionOut" class="sessionout hidden" aria-live="polite"></div>
+  </section>
+
+  <section class="card page" aria-label="On-page check">
+    <div id="checks" class="checks"></div>
+    <p id="checkNote" class="note muted hidden">Checked here in your browser: nothing was sent anywhere. It reads the
+      page as shown now (after JavaScript). HTTP status and response headers are checked when ARACHNIX crawls it.</p>
+  </section>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

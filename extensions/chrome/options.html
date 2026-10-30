@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ARACHNIX Companion options</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="options.css">
+</head>
+<body class="options">
+  <main class="wrap">
+    <header class="head">
+      <div class="brand"><img src="icons/mark.svg" alt=""><span>Slick<span class="up">UP</span> <small>Companion</small></span></div>
+      <span id="version" class="muted small"></span>
+    </header>
+
+    <section class="card pad" aria-labelledby="serverTitle">
+      <h1 id="serverTitle">Your ARACHNIX server</h1>
+      <form id="serverForm" autocomplete="off" novalidate>
+        <label class="field">ARACHNIX address
+          <input id="server" class="input" type="text" inputmode="url" spellcheck="false" placeholder="http://10.10.6.56:8000">
+          <span class="help">The address you open ARACHNIX at in this browser.</span>
+        </label>
+        <label class="field">Team access key
+          <input id="key" class="input" type="password" spellcheck="false" autocomplete="new-password">
+          <span id="keyHelp" class="help">Only when your ARACHNIX asks for one. Kept on this computer only (never synced)
+            and never shown again.</span>
+        </label>
+        <div id="keyState" class="keystate hidden"><span class="chip pass">Access key set</span>
+          <button id="keyClear" class="btn-link" type="button">Remove the saved key</button></div>
+        <details class="adv">
+          <summary>Advanced</summary>
+          <label class="field">Dashboard address (optional)
+            <input id="dash" class="input" type="text" inputmode="url" spellcheck="false" placeholder="Same as the ARACHNIX address">
+            <span class="help">Only when the dashboard is hosted separately from the server (for example on Vercel).
+              "Audit this site" and "Use my session" open it.</span>
+          </label>
+        </details>
+        <div class="btns">
+          <button id="save" class="btn btn-go" type="submit">Save</button>
+          <button id="test" class="btn" type="button">Test connection</button>
+        </div>
+      </form>
+      <div id="status" class="status" aria-live="polite"></div>
+    </section>
+
+    <section class="card pad" aria-labelledby="lookTitle">
+      <h2 id="lookTitle">Appearance</h2>
+      <div class="look">
+        <span class="lbl">Theme</span>
+        <div class="seg" id="themeSeg" role="group" aria-label="Theme">
+          <button type="button" data-v="system">System</button><button type="button" data-v="light">Light</button><button type="button" data-v="dark">Dark</button>
+        </div>
+        <span class="lbl">Glass effects</span>
+        <div class="seg" id="glassSeg" role="group" aria-label="Glass effects">
+          <button type="button" data-v="on">On</button><button type="button" data-v="off">Off</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card pad" aria-labelledby="permTitle">
+      <h2 id="permTitle">What ARACHNIX Companion may do, and why</h2>
+      <ul class="perms">
+        <li><b>Active tab</b>: read the page you are on, only when you open ARACHNIX Companion on it, for the on-page check.</li>
+        <li><b>Scripting</b>: run that check inside the page. It reads the page, changes nothing and sends nothing.</li>
+        <li><b>Storage</b>: keep these settings on this computer.</li>
+        <li><b>Your ARACHNIX address</b> (asked when you save): talk to your ARACHNIX server, and nothing else.</li>
+        <li><b>Cookies and that site's address</b> (asked each time you click "Use my session in ARACHNIX"): read the
+          cookies your browser would send to that one site, send them to your ARACHNIX server once, then give the access
+          back. Cookie values are never shown or kept by the extension.</li>
+      </ul>
+      <h3>Access you have given</h3>
+      <div id="grants" class="grants"></div>
+    </section>
+  </main>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

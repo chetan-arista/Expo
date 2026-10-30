@@ -9,3 +9,7 @@ venv/
 .vercel/
 .DS_Store
 research/
+
+# Screaming Frog reference screenshots (Build 3 input, local only like research/)
+missing bar/
+missing filter/

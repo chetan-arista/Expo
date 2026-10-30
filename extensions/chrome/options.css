@@ -1,0 +1,25 @@
+/* The options page (opens in a tab). */
+body.options { min-height: 100vh; padding: 28px 16px 40px; }
+.wrap { max-width: 620px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+.head { display: flex; align-items: center; justify-content: space-between; padding: 0 4px; }
+.head .brand { font-size: 18px; }
+.head .brand img { width: 30px; height: 30px; border-radius: 8px; }
+.pad { padding: 16px 18px; }
+h1 { font-size: 17px; margin: 0 0 12px; letter-spacing: -0.01em; }
+h2 { font-size: 15px; margin: 0 0 10px; }
+h3 { font-size: 12.5px; margin: 14px 0 6px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+form { display: flex; flex-direction: column; gap: 12px; }
+.keystate { display: flex; align-items: center; gap: 10px; margin-top: -4px; }
+.adv summary { cursor: pointer; font-weight: 600; font-size: 12.5px; color: var(--muted); }
+.adv[open] summary { margin-bottom: 8px; }
+.btns { display: flex; gap: 8px; }
+.status { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.status:empty { display: none; }
+.look { display: grid; grid-template-columns: auto 1fr; gap: 10px 14px; align-items: center; justify-items: start; }
+.lbl { font-weight: 600; font-size: 12.5px; }
+.perms { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--ink-2); }
+.perms b { color: var(--ink); }
+.grants { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+.grant { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; border-radius: 9px; background: var(--btn2-bg); }
+.grant .mono { font-size: 12px; overflow-wrap: anywhere; }
+.small { font-size: 11.5px; }

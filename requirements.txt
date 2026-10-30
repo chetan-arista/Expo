@@ -1,11 +1,39 @@
+# ARACHNIX - Python packages (Python 3.11 or newer).
+# Install:  pip install -r requirements.txt
+# The hosted server (Dockerfile) installs exactly this file. No paid AI SDK is needed: the free AI
+# providers (Gemini, Groq, OpenRouter, Ollama) are called over plain HTTPS with `requests`.
+
+# --- Crawling and parsing ---
 requests>=2.28.0
+urllib3>=1.26.0         # used directly for retries and network error types (also installed by requests)
 beautifulsoup4>=4.11.0
-openpyxl>=3.1.0
-reportlab>=4.0.0
+lxml>=5.0.0             # fast HTML parser for the SEO extraction (falls back to html.parser when missing)
+pycountry>=22.3.5       # ISO language / region codes for the hreflang tab; country names in Business Insights
+
+# --- Reports ---
+openpyxl>=3.1.0         # Excel export
+reportlab>=4.0.0        # PDF reports (Website Audit Report, Business Insights)
+Pillow>=10.0.0          # screenshot boxes, crops and callouts in the PDF evidence; text pixel widths
+
+# --- Web app ---
 fastapi>=0.100.0
 uvicorn>=0.20.0
 pydantic>=2.0.0
-# Optional: needs Chrome installed. Enables screenshots in the PDF issue report
-# and headless rendering of JavaScript-heavy pages. Without it the PDF shows
-# page-position sketches instead of screenshots.
-# selenium>=4.15.0
+
+# --- Browser (needs Chrome or Chromium on the machine) ---
+# Password logins on JavaScript login pages, the live login window, JavaScript page rendering and
+# the screenshots in the PDF. The Docker image installs Chromium for Render; on a PC, Selenium finds
+# the installed Google Chrome by itself. Without Chrome the app still runs: plain-HTML form, cookie
+# and header logins work, and the PDF shows drawn mock-ups instead of screenshots.
+selenium>=4.15.0
+websocket-client>=1.6.0 # the second DevTools connection of "render every page" (console, requests, proxy login);
+                        # installed with Selenium, listed so a slim install keeps it
+
+# --- Build 4 / ARACHNIX 2.0 ---
+mcp>=2.3,<3                 # MCP server for AI agents (/mcp and the stdio bridge, crawler/mcp/)
+pyspellchecker>=0.9.1,<0.10 # Content > Spelling Errors (crawler/seo/spelling.py; MIT, word lists in the package)
+pypdf>=6,<7                 # PDF properties and text of PDFs the crawl finds (crawler/seo/pdf_meta.py; BSD-3)
+
+# --- Optional, paid (not installed by default) ---
+# Only if the team ever sets ANTHROPIC_API_KEY. Not needed for the free AI providers.
+# anthropic

@@ -1,0 +1,204 @@
+/* ARACHNIX Companion: the dashboard's Build 3 design tokens ("Sage mist") and its liquid-glass material, trimmed to
+   what the popup and the options page use. Light by default; Dark when the computer is dark (System) or when Dark is
+   chosen in the options (data-theme on <html>). data-glass="off" (options: Glass effects Off, or the computer asks
+   for reduced transparency) gives solid surfaces. Status colours keep their meaning in both themes: --c* text tones,
+   --t* chip tints, --f* mark fills. */
+:root {
+  color-scheme: light;
+  --bg: #ECF0ED; --panel: #F8FAF8; --panel-2: #F1F4F2; --float: #FFFFFF; --field: #FCFDFC;
+  --line: rgba(28,54,40,.14); --line-2: rgba(28,54,40,.08);
+  --ink: #1E2823; --ink-2: #39443E; --muted: #55625A;
+  --accent: #2F6B3F; --accent-hover: #285D36; --on-accent: #FFFFFF; --accent-ink: #2A6340; --accent-soft: #E2EEE6;
+  --focus: #3567A0; --focus-ring: rgba(53,103,160,.24); --link: #2C5A8A;
+  --btn2-bg: rgba(28,54,40,.065); --btn2-hover: rgba(28,54,40,.11);
+  --warn-bg: #F6EEDC; --warn-ink: #5E430F; --bad-bg: #F7E6E8; --bad-ink: #6E1F2D; --ok-ink: #1D4A2C;
+  --danger: #A9384A;
+  --c2: #2B6A40; --c3: #7E520C; --c4: #A4364A; --ce: #535C56; --opp: #2C6188;
+  --t2: #DFE9E2; --t3: #E9E6DC; --t4: #EEE2E3; --te: #E4E7E5; --topp: #E0E8EB;
+  --f2: #448850; --f3: #E9A23B; --f4: #9A3438; --fe: #97A09A;
+  --zone: rgba(68,136,80,.16);
+  --shadow-sm: 0 1px 2px rgba(20,40,28,.10), 0 0 0 .5px rgba(20,40,28,.06);
+  --shadow-accent: 0 1px 2px rgba(15,50,28,.28), inset 0 1px 0 rgba(255,255,255,.14);
+  --font: 'Plus Jakarta Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', Consolas, 'Cascadia Mono', monospace;
+  --radius: 12px; --ctl-radius: 9px;
+  --ease: cubic-bezier(.2, .7, .3, 1); --dur: .16s;
+  /* glass material (same recipe as the dashboard's "Glass effects") */
+  --glass-card: color-mix(in srgb, var(--float) 66%, transparent);
+  --glass-ctl: color-mix(in srgb, var(--float) 60%, transparent); --glass-ctl-hover: color-mix(in srgb, var(--float) 84%, transparent);
+  --glass-pri: color-mix(in srgb, var(--accent-hover) 90%, transparent); --glass-pri-hover: color-mix(in srgb, var(--accent-hover) 96%, transparent);
+  --glass-blur: blur(16px) saturate(170%);
+  --glass-edge: inset 0 1px 0 rgba(255,255,255,.85), inset 0 -1px 0 rgba(20,40,28,.06), inset 0 0 0 1px rgba(255,255,255,.40);
+  --glass-edge-pri: inset 0 1px 0 rgba(255,255,255,.26), inset 0 -1px 0 rgba(0,0,0,.16), inset 0 0 0 1px rgba(255,255,255,.08);
+  --glass-rim: rgba(28,54,40,.11);
+  --glass-lift: 0 1px 2px rgba(20,40,28,.08), 0 3px 10px rgba(20,40,28,.06);
+  --glass-blob-1: color-mix(in srgb, var(--accent) 15%, transparent);
+  --glass-blob-2: color-mix(in srgb, #55b89c 17%, transparent);
+  --glass-blob-3: color-mix(in srgb, #3B7A4E 11%, transparent);
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111714; --panel: #18201B; --panel-2: #1E2621; --float: #232C26; --field: #1B231E;
+  --line: rgba(214,236,222,.13); --line-2: rgba(214,236,222,.07);
+  --ink: #E2E9E4; --ink-2: #CFD8D2; --muted: #A3AFA7;
+  --accent: #2E6E43; --accent-hover: #337A4B; --on-accent: #FFFFFF; --accent-ink: #8FD3A5; --accent-soft: #20342A;
+  --focus: #82AADB; --focus-ring: rgba(130,170,219,.30); --link: #8FB5E0;
+  --btn2-bg: rgba(214,236,222,.075); --btn2-hover: rgba(214,236,222,.12);
+  --warn-bg: #2B2416; --warn-ink: #EACB92; --bad-bg: #34202A; --bad-ink: #F2B8C0; --ok-ink: #A9DDB9;
+  --danger: #A23A4B;
+  --c2: #6CC28A; --c3: #DDA552; --c4: #F2949F; --ce: #A9B3AC; --opp: #7AB6DE;
+  --t2: #253A2D; --t3: #383524; --t4: #3B3330; --te: #2F3832; --topp: #28383A;
+  --f2: #55A96C; --f3: #B37907; --f4: #BE383D; --fe: #686C6A;
+  --zone: rgba(85,169,108,.20);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.45), 0 0 0 .5px rgba(255,255,255,.05);
+  --shadow-accent: 0 1px 2px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.12);
+  --glass-card: color-mix(in srgb, var(--float) 62%, transparent);
+  --glass-ctl: color-mix(in srgb, var(--ink) 9%, transparent); --glass-ctl-hover: color-mix(in srgb, var(--ink) 15%, transparent);
+  --glass-pri: color-mix(in srgb, var(--accent) 90%, transparent); --glass-pri-hover: color-mix(in srgb, var(--accent) 96%, transparent);
+  --glass-blur: blur(16px) saturate(150%);
+  --glass-edge: inset 0 1px 0 rgba(255,255,255,.11), inset 0 -1px 0 rgba(0,0,0,.30), inset 0 0 0 1px rgba(255,255,255,.06);
+  --glass-edge-pri: inset 0 1px 0 rgba(255,255,255,.20), inset 0 -1px 0 rgba(0,0,0,.28), inset 0 0 0 1px rgba(255,255,255,.07);
+  --glass-rim: rgba(214,236,222,.13);
+  --glass-lift: 0 1px 2px rgba(0,0,0,.35), 0 3px 10px rgba(0,0,0,.22);
+  --glass-blob-1: color-mix(in srgb, var(--accent) 26%, transparent);
+  --glass-blob-2: color-mix(in srgb, #44a68b 11%, transparent);
+  --glass-blob-3: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #111714; --panel: #18201B; --panel-2: #1E2621; --float: #232C26; --field: #1B231E;
+    --line: rgba(214,236,222,.13); --line-2: rgba(214,236,222,.07);
+    --ink: #E2E9E4; --ink-2: #CFD8D2; --muted: #A3AFA7;
+    --accent: #2E6E43; --accent-hover: #337A4B; --on-accent: #FFFFFF; --accent-ink: #8FD3A5; --accent-soft: #20342A;
+    --focus: #82AADB; --focus-ring: rgba(130,170,219,.30); --link: #8FB5E0;
+    --btn2-bg: rgba(214,236,222,.075); --btn2-hover: rgba(214,236,222,.12);
+    --warn-bg: #2B2416; --warn-ink: #EACB92; --bad-bg: #34202A; --bad-ink: #F2B8C0; --ok-ink: #A9DDB9;
+    --danger: #A23A4B;
+    --c2: #6CC28A; --c3: #DDA552; --c4: #F2949F; --ce: #A9B3AC; --opp: #7AB6DE;
+    --t2: #253A2D; --t3: #383524; --t4: #3B3330; --te: #2F3832; --topp: #28383A;
+    --f2: #55A96C; --f3: #B37907; --f4: #BE383D; --fe: #686C6A;
+    --zone: rgba(85,169,108,.20);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,.45), 0 0 0 .5px rgba(255,255,255,.05);
+    --shadow-accent: 0 1px 2px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.12);
+    --glass-card: color-mix(in srgb, var(--float) 62%, transparent);
+    --glass-ctl: color-mix(in srgb, var(--ink) 9%, transparent); --glass-ctl-hover: color-mix(in srgb, var(--ink) 15%, transparent);
+    --glass-pri: color-mix(in srgb, var(--accent) 90%, transparent); --glass-pri-hover: color-mix(in srgb, var(--accent) 96%, transparent);
+    --glass-blur: blur(16px) saturate(150%);
+    --glass-edge: inset 0 1px 0 rgba(255,255,255,.11), inset 0 -1px 0 rgba(0,0,0,.30), inset 0 0 0 1px rgba(255,255,255,.06);
+    --glass-edge-pri: inset 0 1px 0 rgba(255,255,255,.20), inset 0 -1px 0 rgba(0,0,0,.28), inset 0 0 0 1px rgba(255,255,255,.07);
+    --glass-rim: rgba(214,236,222,.13);
+    --glass-lift: 0 1px 2px rgba(0,0,0,.35), 0 3px 10px rgba(0,0,0,.22);
+    --glass-blob-1: color-mix(in srgb, var(--accent) 26%, transparent);
+    --glass-blob-2: color-mix(in srgb, #44a68b 11%, transparent);
+    --glass-blob-3: color-mix(in srgb, var(--accent) 16%, transparent);
+  }
+}
+/* Glass effects Off (or the computer asks for less transparency): solid surfaces, no blur */
+:root[data-glass="off"] {
+  --glass-card: var(--panel); --glass-ctl: var(--btn2-bg); --glass-ctl-hover: var(--btn2-hover);
+  --glass-pri: var(--accent); --glass-pri-hover: var(--accent-hover); --glass-blur: none;
+  --glass-edge: 0 0 0 0 transparent; --glass-edge-pri: var(--shadow-accent); --glass-lift: var(--shadow-sm);
+  --glass-blob-1: transparent; --glass-blob-2: transparent; --glass-blob-3: transparent;
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root:not([data-glass="on"]) {
+    --glass-card: var(--panel); --glass-ctl: var(--btn2-bg); --glass-ctl-hover: var(--btn2-hover);
+    --glass-pri: var(--accent); --glass-pri-hover: var(--accent-hover); --glass-blur: none;
+    --glass-edge: 0 0 0 0 transparent; --glass-edge-pri: var(--shadow-accent); --glass-lift: var(--shadow-sm);
+    --glass-blob-1: transparent; --glass-blob-2: transparent; --glass-blob-3: transparent;
+  }
+}
+
+* { box-sizing: border-box; }
+html { background: var(--bg); }
+body {
+  margin: 0; color: var(--ink); font: 13px/1.45 var(--font); font-feature-settings: 'calt' 0;
+  background:
+    radial-gradient(420px 260px at 8% -4%, var(--glass-blob-1), transparent 70%),
+    radial-gradient(360px 300px at 104% 22%, var(--glass-blob-2), transparent 70%),
+    radial-gradient(380px 280px at 30% 108%, var(--glass-blob-3), transparent 70%),
+    var(--bg);
+  background-attachment: fixed;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+a { color: var(--link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.hidden { display: none !important; }
+.muted { color: var(--muted); }
+.mono { font-family: var(--mono); }
+.tnum { font-variant-numeric: tabular-nums; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* brand */
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 800; letter-spacing: -0.01em; font-size: 15px; }
+.brand img { width: 24px; height: 24px; border-radius: 6px; display: block; }
+.brand .up { color: var(--accent-ink); }
+.brand small { font-weight: 600; font-size: 12px; color: var(--muted); letter-spacing: 0; }
+
+/* glass cards (content stays readable: the tint keeps text at AA over the soft blobs) */
+.card {
+  background: var(--glass-card); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-rim); border-radius: var(--radius); box-shadow: var(--glass-edge), var(--glass-lift);
+}
+
+/* buttons */
+.btn {
+  border: 1px solid transparent; border-radius: var(--ctl-radius); padding: 7px 13px; font-weight: 600; font-size: 12.5px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; white-space: nowrap;
+  background: var(--glass-ctl); color: var(--ink); box-shadow: var(--glass-edge);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  transition: background-color var(--dur) ease, box-shadow var(--dur) ease, transform var(--dur) ease;
+}
+.btn:hover:not(:disabled) { background: var(--glass-ctl-hover); }
+.btn:active:not(:disabled) { transform: translateY(.5px); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn-go { background: var(--glass-pri); color: var(--on-accent); box-shadow: var(--glass-edge-pri), var(--shadow-accent); }
+.btn-go:hover:not(:disabled) { background: var(--glass-pri-hover); }
+.btn-sm { padding: 4px 9px; font-size: 11.5px; border-radius: 7px; }
+.btn-link { background: none; border: 0; box-shadow: none; padding: 0; color: var(--link); font-weight: 600; cursor: pointer; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.btn-link:hover { text-decoration: underline; }
+
+/* status chips: a word and a glyph, never colour alone */
+.chip {
+  display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 1px 8px 1px 6px; font-size: 11px;
+  font-weight: 700; white-space: nowrap; line-height: 18px; background: var(--te); color: var(--ce);
+}
+.chip::before { font-size: 10.5px; content: "i"; font-weight: 800; }
+.chip.pass { background: var(--t2); color: var(--c2); }
+.chip.pass::before { content: "\2713"; }
+.chip.warn { background: var(--t3); color: var(--c3); }
+.chip.warn::before { content: "!"; }
+.chip.fail { background: var(--t4); color: var(--c4); }
+.chip.fail::before { content: "\2715"; }
+.chip.info::before { content: "i"; }
+.chip.plain::before { content: none; }
+.chip.plain { padding: 1px 8px; font-weight: 600; }
+
+/* messages */
+.msg { border-radius: 10px; padding: 8px 10px; font-size: 12.5px; display: flex; gap: 8px; align-items: flex-start; }
+.msg::before { flex: 0 0 auto; font-weight: 800; width: 16px; height: 16px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10.5px; margin-top: 1px; }
+.msg.ok { background: var(--t2); color: var(--ok-ink); }
+.msg.ok::before { content: "\2713"; background: var(--f2); color: #fff; }
+.msg.warn { background: var(--warn-bg); color: var(--warn-ink); }
+.msg.warn::before { content: "!"; background: var(--f3); color: #1A1408; }
+.msg.bad { background: var(--bad-bg); color: var(--bad-ink); }
+.msg.bad::before { content: "\2715"; background: var(--f4); color: #fff; }
+.msg.info { background: var(--topp); color: var(--ink); }
+.msg.info::before { content: "i"; background: var(--opp); color: #fff; }
+.msg .grow { flex: 1 1 auto; min-width: 0; }
+.msg ul { margin: 4px 0 0; padding-left: 16px; }
+
+/* fields */
+label.field { display: flex; flex-direction: column; gap: 4px; font-weight: 600; font-size: 12.5px; }
+.input {
+  width: 100%; border: 0; border-radius: 10px; padding: 8px 10px; background: var(--field); color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--line); transition: box-shadow var(--dur) ease; font-weight: 500;
+}
+.input:focus { outline: 0; box-shadow: inset 0 0 0 1px var(--focus), 0 0 0 3px var(--focus-ring); }
+.input::placeholder { color: var(--muted); }
+.help { font-weight: 400; font-size: 11.5px; color: var(--muted); }
+.seg { display: inline-flex; background: var(--btn2-bg); border-radius: 9px; padding: 2px; gap: 2px; }
+.seg button { border: 0; background: transparent; border-radius: 7px; padding: 4px 10px; font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--float); color: var(--ink); box-shadow: var(--shadow-sm); }
