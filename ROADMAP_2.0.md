@@ -36,7 +36,7 @@ upload screen, U4 (AI prompts), U9 (point-and-click extractor, Bulk add, Search 
 options, snippet library), U10 (comparison report, IndexNow, five more change checks), U12 (Colour by / Size by on the
 tree graphs) and U13 (SERP preview for tablet and mobile with your own text, View Source line diff; n-grams are in
 Configuration > SEO tools). The 2.0 features are on by default (`ARACHNIX_V2_FEATURES=0` hides them).
-Still open: the 2.0 chapter of the User Guide PDF. Documentation: DOCUMENTATION.md section 25.
+The User Guide PDF is version 2.0 (chapter "What's new in 2.0", 30 October 2026). Still open: the small polish items of section 6. Documentation: DOCUMENTATION.md section 25.
 
 ---
 
